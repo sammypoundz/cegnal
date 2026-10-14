@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+@theme {
+  /* Cegnal design tokens */
+  --color-ink: #101820;
+  --color-gold: #c99a2e;
+  --color-gold-soft: #f7eeda;
+  --color-canvas: #f6f8fa;
+  --color-surface: #ffffff;
+  --color-body: #182230;
+  --color-muted: #667085;
+  --color-success: #16835d;
+  --color-success-soft: #e6f4ee;
+  --color-danger: #c43d3d;
+  --color-danger-soft: #fbeaea;
+  --color-warn: #b54708;
+  --color-warn-soft: #fef3e8;
+  --color-line: #e2e7ec;
+  --radius-card: 16px;
+  --font-sans:
+    "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Zone (Forex Signal Zone) design tokens — gold & black theme */
+  --color-z-blue: #c99a2e;
+  --color-z-blue-soft: #f7eeda;
+  --color-z-charcoal: #0b0b0b;
+  --color-z-navy: #0b0b0b;
+  --color-z-gray: #e9e9e9;
+  --color-z-ink: #0b0b0b;
+  --color-z-line: #e6dcc4;
+  --color-z-amber: #f5a623;
+  --color-z-red: #ff4d4f;
+  --color-z-mute: #8a8f98;
+  --radius-zone-card: 16px;
+}
+
+html,
+body {
+  font-family: var(--font-sans);
+  color: var(--color-body);
+  background: var(--color-canvas);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-max {
+  max-width: 480px;
+  margin-inline: auto;
+}
+.app-page {
+  min-height: 100dvh;
+}
+@media (min-width: 768px) {
+  .app-max {
+    max-width: 768px;
+  }
+}
+@media (min-width: 1280px) {
+  .app-max {
+    max-width: 1104px;
+  }
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Card style matching the bottom-nav dock: black border, frosted white bg, soft shadow */
+.z-card {
+  border: 1.5px solid #0b0b0b;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(8px);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #eceff3;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.6),
+    transparent
+  );
+  animation: shimmer 1.4s infinite;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
