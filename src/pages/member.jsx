@@ -18,6 +18,7 @@ import {
 } from "../components/ui";
 import { SignalCard, RiskDisclaimer } from "../components/signal";
 import { signals, user, notifications, payments, risks } from "../lib/data";
+import { getTheme, toggleTheme } from "../lib/theme";
 import {
   SearchIcon,
   HeartIcon,
@@ -219,7 +220,7 @@ export function SignalFeed({ premiumOnly = false }) {
             <button
               key={k}
               onClick={() => setF({ ...f, [k]: FILTERS[k][0] })}
-              className="flex items-center gap-1 rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-white"
+              className="flex items-center gap-1 rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-surface"
             >
               {v} <span aria-hidden="true">×</span>
             </button>
@@ -772,6 +773,13 @@ export function Profile() {
       <Card className="mb-4 divide-y divide-line">
         <div className="flex items-center justify-between p-4">
           <div>
+            <div className="text-sm font-semibold">Dark mode</div>
+            <div className="text-xs text-muted">Easier on the eyes at night</div>
+          </div>
+          <DarkModeToggle />
+        </div>
+        <div className="flex items-center justify-between p-4">
+          <div>
             <div className="text-sm font-semibold">
               Signal update notifications
             </div>
@@ -819,6 +827,23 @@ export function Profile() {
       </Card>
       <Toast message={toast} />
     </Page>
+  );
+}
+
+function DarkModeToggle() {
+  const [dark, setDark] = useState(getTheme() === "dark");
+  return (
+    <button
+      role="switch"
+      aria-checked={dark}
+      aria-label="Toggle dark mode"
+      onClick={() => setDark(toggleTheme() === "dark")}
+      className={`relative h-7 w-12 rounded-full transition-colors ${dark ? "bg-gold" : "bg-line"}`}
+    >
+      <span
+        className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${dark ? "left-6" : "left-1"}`}
+      />
+    </button>
   );
 }
 

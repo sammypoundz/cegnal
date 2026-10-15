@@ -20,10 +20,11 @@ import {
 import ZoneHeroSlider from "../components/ZoneHeroSlider";
 import { zoneTraders, zoneUser, zoneNotifications, zoneMembers, zoneLiveSignal, zoneSignalHistory, zoneJoined } from "../lib/zoneData";
 import { CheckIcon, ChevronRightIcon, ArrowUpIcon as UpIcon, ArrowDownIcon as DownIcon, ClockHistoryIcon, UserIcon, CloseIcon } from "../components/icons";
+import { getTheme, toggleTheme } from "../lib/theme";
 
 function ZoneShell({ children, tabs = false, onTab }) {
   return (
-    <div className="min-h-dvh bg-[#faf8f2]">
+    <div className="min-h-dvh z-page">
       <div className="app-max">
         {children}
         <div className="h-20" />
@@ -222,12 +223,12 @@ export function ZoneTraderProfile() {
   ];
 
   return (
-    <div className="min-h-dvh bg-[#faf8f2]">
+    <div className="min-h-dvh z-page">
       <div className="app-max">
         <ZoneHeader title="Zones" back />
         <main className="pb-32">
           {/* profile header */}
-          <section className="flex flex-col items-center bg-white px-4 pb-5 pt-4">
+          <section className="flex flex-col items-center z-surface px-4 pb-5 pt-4">
             <ZoneAvatar name={trader.name} size={88} ring />
             <h1 className="mt-3 text-[22px] font-bold text-z-ink">
               {trader.displayName}
@@ -263,7 +264,7 @@ export function ZoneTraderProfile() {
         </main>
 
         {/* fixed subscribe action */}
-        <div className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-z-line bg-white px-4 py-3">
+        <div className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-z-line z-surface px-4 py-3">
           <div className="mx-auto w-full max-w-[480px]">
             <ZoneButton
               className="w-full"
@@ -359,12 +360,12 @@ export function ZoneRoom() {
   ];
 
   return (
-    <div className="min-h-dvh bg-[#faf8f2]">
+    <div className="min-h-dvh z-page">
       <div className="app-max">
         <ZoneHeader title={trader.displayName} back />
 
         {/* room banner */}
-        <section className="bg-white px-4 pb-4 pt-3">
+        <section className="z-surface px-4 pb-4 pt-3">
           <div className="flex items-center gap-3">
             <ZoneAvatar name={trader.name} size={52} ring />
             <div className="min-w-0">
@@ -393,7 +394,7 @@ export function ZoneRoom() {
                 aria-current={tab === t.id ? "true" : undefined}
                 className={`min-h-[38px] rounded-lg text-[13px] font-semibold transition ${
                   tab === t.id
-                    ? "bg-white text-z-ink shadow-sm"
+                    ? "z-surface text-z-ink shadow-sm"
                     : "text-z-mute hover:text-z-ink"
                 }`}
               >
@@ -470,7 +471,7 @@ export function ZoneRoom() {
                   </p>
 
                   {/* signal participation */}
-                  <div className="mt-4 rounded-xl border border-z-line bg-[#faf8f2] p-3">
+                  <div className="mt-4 rounded-xl border border-z-line z-page p-3">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2">
                         <div className="flex -space-x-2">
@@ -891,12 +892,12 @@ export function ZoneProfilePage() {
 
 export function ZoneSettingsPage() {
   const [notify, setNotify] = useState(true);
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(getTheme() === "dark");
   return (
     <ZoneShell>
       <ZoneHeader title="Settings" back />
       <main className="px-3 pt-4">
-        <section className="bg-white px-4">
+        <section className="z-surface px-4">
           {[
             ["Account", "Name, email, password"],
             ["Payment methods", "Cards and transfers"],
@@ -918,7 +919,7 @@ export function ZoneSettingsPage() {
             </button>
           ))}
         </section>
-        <section className="mt-3 bg-white px-4">
+        <section className="mt-3 z-surface px-4">
           <div className="flex items-center justify-between border-b border-z-line py-3.5">
             <span className="text-[15px] font-medium text-z-ink">
               Push notifications
@@ -941,7 +942,8 @@ export function ZoneSettingsPage() {
             <button
               role="switch"
               aria-checked={dark}
-              onClick={() => setDark(!dark)}
+              aria-label="Toggle dark mode"
+              onClick={() => setDark(toggleTheme() === "dark")}
               className={`h-6 w-11 rounded-full p-0.5 transition ${dark ? "bg-z-blue" : "bg-z-gray"}`}
             >
               <span

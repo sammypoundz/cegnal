@@ -34,12 +34,48 @@
   --radius-zone-card: 16px;
 }
 
+/* Dark theme — re-maps the design tokens when <html class="dark"> is set.
+   Since Tailwind utilities compile to var(--color-*), the whole UI flips without
+   touching any component classes. */
+html.dark {
+  --color-canvas: #0c1116;
+  --color-surface: #151c24;
+  --color-body: #d5dce4;
+  --color-muted: #8b96a5;
+  --color-line: #26303b;
+  --color-ink: #e6ecf2;
+  --color-gold-soft: #2a2313;
+  --color-success-soft: #12291f;
+  --color-danger-soft: #2d1515;
+  --color-warn-soft: #2b1d0e;
+
+  --color-z-gray: #23262b;
+  --color-z-ink: #f2f2f2;
+  --color-z-line: #33302a;
+  --color-z-mute: #9aa0a8;
+  --color-z-blue-soft: #2a2313;
+  color-scheme: dark;
+}
+
 html,
 body {
   font-family: var(--font-sans);
   color: var(--color-body);
   background: var(--color-canvas);
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth color transition when switching themes */
+body,
+header,
+nav,
+main,
+section,
+footer,
+div,
+button,
+span {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
 }
 
 .app-max {
@@ -69,11 +105,59 @@ body {
 
 /* Card style matching the bottom-nav dock: black border, frosted white bg, soft shadow */
 .z-card {
-  border: 1.5px solid #0b0b0b;
+  border: 1.5px solid var(--color-z-ink);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.95);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(8px);
+}
+html.dark .z-card {
+  border-color: #3a3428;
+  background: rgba(26, 32, 40, 0.95);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Zone page/surface utilities — same look in light mode, dark surfaces in dark mode */
+.z-page {
+  background: #faf8f2;
+}
+/* Bottom dock (Zone menu): frosted light in light mode, frosted dark in dark mode */
+.z-dock {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1.5px solid var(--color-z-line);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+html.dark .z-dock {
+  background: rgba(21, 28, 36, 0.85);
+  border-color: #2c3641;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* Active tab pill inside the dock: black in light mode, tinted in dark mode */
+.z-dock-active {
+  background: #0b0b0b;
+}
+html.dark .z-dock-active {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.z-surface {
+  background: #ffffff;
+}
+html.dark .z-page {
+  background: #0c1116;
+}
+html.dark .z-surface {
+  background: #151c24;
+}
+
+/* Zone header/drawer/tabs use bg-white directly */
+html.dark .bg-white\/95 {
+  background-color: rgba(21, 28, 36, 0.95);
+}
+html.dark .bg-white\/60 {
+  background-color: rgba(21, 28, 36, 0.6);
 }
 
 .no-scrollbar::-webkit-scrollbar {
@@ -92,7 +176,7 @@ body {
 .skeleton {
   position: relative;
   overflow: hidden;
-  background: #eceff3;
+  background: var(--color-line);
 }
 .skeleton::after {
   content: "";
@@ -102,7 +186,7 @@ body {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.6),
+    var(--color-surface),
     transparent
   );
   animation: shimmer 1.4s infinite;

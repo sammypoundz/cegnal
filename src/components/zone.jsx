@@ -74,7 +74,7 @@ export function ZoneButton({ variant = "blue", className = "", ...props }) {
   const variants = {
     blue: "bg-z-blue text-white active:brightness-95 hover:brightness-105",
     charcoal: "bg-z-charcoal text-white hover:bg-[#2b2b2b]",
-    outline: "border border-z-line bg-white text-z-ink hover:bg-z-gray/50",
+    outline: "border border-z-line z-surface text-z-ink hover:bg-z-gray/50",
   };
   return (
     <button
@@ -89,7 +89,7 @@ export function ZoneButton({ variant = "blue", className = "", ...props }) {
 export function ZoneHeader({ title, back = false, right = null }) {
   const navigate = useNavigate();
   return (
-    <header className="safe-top sticky top-0 z-40 border-b border-z-line bg-white">
+    <header className="safe-top sticky top-0 z-40 border-b border-z-line z-surface">
       <div className="mx-auto flex h-14 w-full max-w-[480px] items-center gap-2 px-4">
         {back ? (
           <button
@@ -187,7 +187,7 @@ export function ZoneDrawer({ open, onClose }) {
         role="dialog"
         aria-modal="true"
         aria-label="Menu"
-        className="safe-top h-full w-[280px] bg-white shadow-xl"
+        className="safe-top h-full w-[280px] z-surface shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-z-line px-4 py-4">
@@ -253,10 +253,7 @@ export function ZoneBottomNav() {
     >
       <div className="mx-auto w-full max-w-[480px] px-4 pb-3">
         <div
-          className="relative flex items-center justify-between gap-1 rounded-full bg-white/95 px-2 py-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur"
-          style={{
-            border: "1.5px solid #0b0b0b",
-          }}
+          className="z-dock relative flex items-center justify-between gap-1 rounded-full px-2 py-1.5 backdrop-blur"
         >
           {tabs.map(({ to, label, end, icon: Icon }) => (
             <NavLink
@@ -280,8 +277,8 @@ export function ZoneBottomNav() {
                   <span
                     className={`relative flex min-h-[44px] items-center gap-2 rounded-full px-3 transition-all duration-300 ${
                       active
-                        ? "bg-[#0b0b0b] shadow-[0_4px_14px_rgba(0,0,0,0.35)]"
-                        : "bg-transparent hover:bg-black/5"
+                        ? "z-dock-active"
+                        : "bg-transparent hover:bg-black/5 dark:hover:bg-white/10"
                     }`}
                   >
                     <span
@@ -447,7 +444,7 @@ export function PromotionalBanner() {
 export function CategoryTabs({ active, onChange }) {
   const tabs = ["All", "Zones", "Top-rated"];
   return (
-    <div className="sticky top-14 z-30 mx-auto w-full max-w-[480px] border-b border-z-line bg-white">
+    <div className="sticky top-14 z-30 mx-auto w-full max-w-[480px] border-b border-z-line z-surface">
       <div className="flex">
         {tabs.map((t) => (
           <button

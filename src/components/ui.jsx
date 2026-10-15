@@ -19,7 +19,7 @@ export function Button({
   ...props
 }) {
   const variants = {
-    primary: "bg-ink text-white hover:bg-[#1c2833] active:bg-[#0a1116]",
+    primary: "bg-ink text-surface hover:brightness-125 active:brightness-90",
     gold: "bg-gold text-ink hover:brightness-105 active:brightness-95",
     secondary: "border border-line bg-surface text-body hover:bg-canvas",
     text: "text-gold hover:underline px-1 min-h-[44px]",
@@ -99,7 +99,7 @@ const toneCls = {
   warn: "bg-warn-soft text-warn",
   gold: "bg-gold-soft text-gold",
   muted: "bg-canvas text-muted border border-line",
-  ink: "bg-ink text-white",
+  ink: "bg-ink text-surface",
 };
 
 export function StatusChip({ status }) {
@@ -235,7 +235,7 @@ export function Toast({ message }) {
       role="status"
       className="fixed inset-x-0 bottom-24 z-50 flex justify-center px-4"
     >
-      <div className="rounded-xl bg-ink px-4 py-2.5 text-sm font-medium text-white shadow-lg">
+      <div className="rounded-xl bg-ink px-4 py-2.5 text-sm font-medium text-surface shadow-lg">
         {message}
       </div>
     </div>

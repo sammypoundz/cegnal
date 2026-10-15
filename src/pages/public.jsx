@@ -434,7 +434,7 @@ export function Legal({ kind }) {
             to={`/legal/${Object.keys(legalContent).find((k) => legalContent[k] === l)}`}
           >
             <span
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${l.title === c.title ? "bg-ink text-white" : "border border-line bg-surface text-muted"}`}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${l.title === c.title ? "bg-ink text-surface" : "border border-line bg-surface text-muted"}`}
             >
               {l.title}
             </span>
