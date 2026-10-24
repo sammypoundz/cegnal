@@ -174,6 +174,7 @@ const drawerLinks = [
   { to: "/zone?tab=top", label: "Top Traders", Icon: StarIcon },
   { to: "/zone/subscriptions", label: "My Subscriptions", Icon: CheckIcon },
   { to: "/zone/checkout", label: "Transaction History", Icon: WalletIcon },
+  { to: "/zone/analyst", label: "Analyst Studio", Icon: StarIcon },
   { to: "/zone/notifications", label: "Notifications", Icon: BellIcon },
   { to: "/zone/settings", label: "Settings", Icon: GearIcon },
   { to: "/zone/profile", label: "Profile", Icon: UserIcon },

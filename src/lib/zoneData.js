@@ -254,6 +254,121 @@ export const zoneSignalHistory = [
   },
 ];
 
+/* ---------------- Analyst (zone owner) data (illustrative) ---------------- */
+
+export const analystProfile = {
+  name: "Kat Forex",
+  username: "@katforex",
+  initials: "KF",
+  marketType: "Forex & Gold",
+  fee: "$50",
+  entryFee: "10$",
+  rating: 4.5,
+  reviewCount: 200,
+};
+
+export const analystZones = [
+  {
+    id: "katforex",
+    name: "Kat Forex Zone",
+    marketType: "Forex & Gold",
+    fee: "$50",
+    entryFee: "10$",
+    status: "Active",
+    subscribers: 312,
+    liveSignals: 1,
+    winRate: "75%",
+    catalogs: ["chart", "terminal", "analysis", "course"],
+    created: "Created Jan 2026",
+  },
+  {
+    id: "kat-gold-swings",
+    name: "Gold Swing Room",
+    marketType: "Gold",
+    fee: "$30",
+    entryFee: "8$",
+    status: "Draft",
+    subscribers: 0,
+    liveSignals: 0,
+    winRate: "—",
+    catalogs: ["chart", "analysis"],
+    created: "Created 2 days ago",
+  },
+];
+
+export const analystSignals = [
+  {
+    id: "asig-1",
+    zoneId: "katforex",
+    pair: "XAU/USD",
+    direction: "Buy",
+    status: "Live",
+    entry: "2,312.40 – 2,315.80",
+    stopLoss: "2,304.00",
+    targets: "2,328.00 / 2,341.50",
+    rr: "1:2.4",
+    timeframe: "4H",
+    postedAt: "Today, 08:05",
+    takers: 4,
+  },
+  {
+    id: "asig-2",
+    zoneId: "katforex",
+    pair: "GBP/USD",
+    direction: "Sell",
+    status: "Target hit",
+    entry: "1.2890",
+    stopLoss: "1.2935",
+    targets: "1.2810 / 1.2772",
+    rr: "1:2.6",
+    timeframe: "1H",
+    postedAt: "Yesterday, 14:30",
+    takers: 21,
+  },
+  {
+    id: "asig-3",
+    zoneId: "katforex",
+    pair: "EUR/USD",
+    direction: "Buy",
+    status: "Target hit",
+    entry: "1.0842",
+    stopLoss: "1.0798",
+    targets: "1.0910 / 1.0950",
+    rr: "1:2.1",
+    timeframe: "4H",
+    postedAt: "2 days ago",
+    takers: 35,
+  },
+  {
+    id: "asig-4",
+    zoneId: "katforex",
+    pair: "USD/JPY",
+    direction: "Buy",
+    status: "Stopped out",
+    entry: "151.20",
+    stopLoss: "150.80",
+    targets: "152.40",
+    rr: "1:3",
+    timeframe: "1H",
+    postedAt: "3 days ago",
+    takers: 12,
+  },
+  {
+    id: "asig-5",
+    zoneId: "kat-gold-swings",
+    pair: "XAU/USD",
+    direction: "Sell",
+    status: "Draft",
+    entry: "2,331.50",
+    stopLoss: "2,338.00",
+    targets: "2,318.00",
+    rr: "1:2",
+    timeframe: "4H",
+    postedAt: "Draft — not published",
+    takers: 0,
+  },
+];
+
 /* Zones the demo user has joined (illustrative). */
 export const zoneJoined = [
   {

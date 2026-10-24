@@ -39,6 +39,7 @@ import {
   ZoneSubscriptionsPage,
   ZoneProfilePage,
   ZoneSettingsPage,
+  AnalystDashboard,
 } from "../pages/zone";
 
 export default function App() {
@@ -90,6 +91,7 @@ function AppRoutes({ role }) {
 
         {/* Forex Signal Zone (mobile UI) */}
         <Route path="/zone" element={<ZoneApp />} />
+        <Route path="/zone/analyst" element={<AnalystDashboard />} />
         <Route path="/zone/traders" element={<ZoneTradersPage />} />
         <Route path="/zone/trader/:traderId" element={<ZoneTraderProfile />} />
         <Route path="/zone/room/:traderId" element={<ZoneRoom />} />
