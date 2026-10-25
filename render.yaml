@@ -1,0 +1,35 @@
+# Render blueprint — one web service that hosts both the API and the built
+# frontend. Deploy with: Render Dashboard → New → Blueprint → pick this repo.
+services:
+  - type: web
+    name: cegnal
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # set in Render dashboard (MongoDB Atlas connection string)
+      - key: JWT_SECRET
+        generateValue: true # Render generates a strong random value
+      - key: ALLOWED_ORIGINS
+        sync: false # e.g. https://cegnal.onrender.com
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_SECURE
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: VITE_API_URL
+        sync: false # e.g. https://cegnal.onrender.com/api (baked at build time!)
