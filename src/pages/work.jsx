@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Page } from "../components/shell";
 import {
@@ -14,8 +14,11 @@ import {
   EmptyState,
   ConfirmModal,
   Toast,
+  SkeletonList,
+  SkeletonStats,
+  SkeletonRows,
 } from "../components/ui";
-import { signals, reviewQueue, auditLog, payments, user } from "../lib/data";
+import { api } from "../lib/api.js";
 import {
   PlusIcon,
   CheckCircleIcon,
@@ -24,21 +27,61 @@ import {
   ChevronDownIcon,
 } from "../components/icons";
 
+/* Shared list loader — every list below comes from the database. */
+function useApiList(path, { map = (d) => d } = {}) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    if (!path) {
+      setLoading(false);
+      return;
+    }
+    api(path)
+      .then((data) => {
+        if (!cancelled) setItems(map(data));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- map is stable per call site
+  }, [path]);
+  return { items, loading };
+}
+
+const normSignal = (s) => ({ ...s, status: s.status.replace(/_/g, "-") });
+
 /* ---------------- Analyst / Admin overview ---------------- */
 export function WorkOverview({ role }) {
+  const { items: signals, loading } = useApiList("/signals?limit=50", {
+    map: (d) => (d.signals || []).map(normSignal),
+  });
+  const { items: metrics } = useApiList(
+    role === "admin" ? "/metrics" : "/metrics",
+    { map: (d) => d || {} },
+  );
+  const { items: audit } = useApiList(
+    role === "admin" ? "/audit-log" : null,
+    { map: (d) => d.auditLog || [] },
+  );
+
   const stats =
     role === "admin"
       ? [
-          ["Users", "—"],
-          ["Active subscriptions", "—"],
+          ["Users", metrics.users ?? "—"],
+          ["Active subscriptions", metrics.activeSubscriptions ?? "—"],
           ["Published signals", String(signals.length)],
-          ["Verified payments", "—"],
+          ["Verified payments", metrics.verifiedPayments ?? "—"],
         ]
       : [
-          ["My drafts", "1"],
-          ["Pending review", "1"],
+          ["My drafts", metrics.myDrafts ?? "—"],
+          ["Pending review", metrics.pendingReview ?? "—"],
           ["Published", String(signals.length)],
-          ["Updated today", "2"],
+          ["Updated today", metrics.updatedToday ?? "—"],
         ];
   return (
     <Page
@@ -47,18 +90,24 @@ export function WorkOverview({ role }) {
     >
       <p className="mb-4 text-sm text-muted">
         {role === "admin"
-          ? "Platform activity summary. Real metrics populate from the database — no sample figures are shown here."
+          ? "Platform activity summary. All figures come from the database."
           : "Your signal workflow at a glance."}
       </p>
-      <div className="mb-6 grid grid-cols-2 gap-3">
-        {stats.map(([label, value]) => (
-          <Card key={label} className="p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted">
-              {label}
-            </div>
-            <div className="text-xl font-extrabold text-body">{value}</div>
-          </Card>
-        ))}
+      <div className="mb-6">
+        {loading ? (
+          <SkeletonStats />
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {stats.map(([label, value]) => (
+              <Card key={label} className="p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  {label}
+                </div>
+                <div className="text-xl font-extrabold text-body">{value}</div>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3">
@@ -77,33 +126,47 @@ export function WorkOverview({ role }) {
       </div>
 
       <h2 className="mb-3 text-[15px] font-bold">Recent signals</h2>
-      <div className="space-y-2">
-        {signals.slice(0, 3).map((s) => (
-          <Card key={s.id} className="flex items-center justify-between p-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold">{s.instrument}</span>
-                <DirectionBadge direction={s.direction} />
+      {loading ? (
+        <SkeletonList count={3} />
+      ) : signals.length === 0 ? (
+        <EmptyState
+          icon={<SearchIcon size={24} />}
+          title="No signals yet"
+          body="Published signals will appear here."
+        />
+      ) : (
+        <div className="space-y-2">
+          {signals.slice(0, 3).map((s) => (
+            <Card key={s.id} className="flex items-center justify-between p-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold">{s.instrument}</span>
+                  <DirectionBadge direction={s.direction} />
+                </div>
+                <div className="text-xs text-muted">Updated {s.updated}</div>
               </div>
-              <div className="text-xs text-muted">Updated {s.updated}</div>
-            </div>
-            <StatusChip status={s.status} />
-          </Card>
-        ))}
-      </div>
+              <StatusChip status={s.status} />
+            </Card>
+          ))}
+        </div>
+      )}
 
       {role === "admin" && (
         <>
           <h2 className="mb-3 mt-6 text-[15px] font-bold">Recent activity</h2>
           <div className="space-y-2">
-            {auditLog.slice(0, 3).map((a, i) => (
-              <Card key={i} className="p-4">
-                <div className="text-sm font-semibold">{a.action}</div>
-                <div className="text-xs text-muted">
-                  {a.actor} · {a.record} · {a.time}
-                </div>
-              </Card>
-            ))}
+            {audit.length === 0 ? (
+              <p className="text-sm text-muted">No recent activity.</p>
+            ) : (
+              audit.slice(0, 3).map((a) => (
+                <Card key={a.id} className="p-4">
+                  <div className="text-sm font-semibold">{a.action}</div>
+                  <div className="text-xs text-muted">
+                    {a.actor} · {a.record} · {a.time}
+                  </div>
+                </Card>
+              ))
+            )}
           </div>
         </>
       )}
@@ -134,18 +197,40 @@ export function SignalForm() {
     return e;
   };
 
-  const submit = (e, publish = true) => {
-    e.preventDefault();
-    const f = new FormData(e.target);
+  const submit = async (e, publish = true) => {
+    e.preventDefault?.();
+    const form = e.target || document.querySelector("form");
+    const f = new FormData(form);
     const errs = validate(f);
     setErrors(errs);
     if (Object.keys(errs).length) return;
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
+    try {
+      await api("/signals", {
+        method: "POST",
+        body: {
+          instrument: f.get("instrument"),
+          market: "Forex",
+          direction: f.get("direction") === "Sell" ? "sell" : "buy",
+          timeframe: f.get("timeframe"),
+          entry: f.get("entry"),
+          stopLoss: f.get("stopLoss"),
+          targets: String(f.get("targets") || "")
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean),
+          tier: f.get("tier") === "Premium" ? "premium" : "free",
+          rationale: f.get("rationale"),
+          status: publish ? "active" : "pending_review",
+        },
+      });
       setToast(publish ? "Signal published" : "Draft saved");
       setTimeout(() => nav("/work"), 1200);
-    }, 700);
+    } catch (err) {
+      setToast(err.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -245,7 +330,7 @@ export function SignalForm() {
         title="Save as draft?"
         body="The signal will be saved without publishing. You can finish and submit it later."
         onClose={() => setConfirm(false)}
-        onConfirm={(e) => {
+        onConfirm={() => {
           setConfirm(false);
           submit(
             {
@@ -263,16 +348,23 @@ export function SignalForm() {
 
 /* ---------------- Review queue ---------------- */
 export function ReviewQueue() {
-  const [items, setItems] = useState(reviewQueue);
+  const { items, loading } = useApiList("/review-queue", {
+    map: (d) => d.items || [],
+  });
+  const [dismissed, setDismissed] = useState([]);
   const [toast, setToast] = useState("");
+  const list = items.filter((i) => !dismissed.includes(i.id));
+
   const act = (id, action) => {
-    setItems(items.filter((i) => i.id !== id));
+    setDismissed([...dismissed, id]);
     setToast(`Signal ${action}`);
     setTimeout(() => setToast(""), 1800);
   };
   return (
     <Page title="Review queue" role="staff">
-      {items.length === 0 ? (
+      {loading ? (
+        <SkeletonList count={3} className="space-y-3" />
+      ) : list.length === 0 ? (
         <EmptyState
           icon={<CheckCircleIcon size={24} />}
           title="Queue is clear"
@@ -280,7 +372,7 @@ export function ReviewQueue() {
         />
       ) : (
         <div className="space-y-3">
-          {items.map((i) => (
+          {list.map((i) => (
             <Card key={i.id} className="p-4">
               <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -332,7 +424,10 @@ export function ReviewQueue() {
 /* ---------------- Signal management ---------------- */
 export function SignalManagement() {
   const [q, setQ] = useState("");
-  const list = signals.filter((s) =>
+  const { items, loading } = useApiList("/signals?limit=50", {
+    map: (d) => (d.signals || []).map(normSignal),
+  });
+  const list = items.filter((s) =>
     s.instrument.toLowerCase().includes(q.toLowerCase()),
   );
   return (
@@ -344,7 +439,9 @@ export function SignalManagement() {
         aria-label="Search signals"
         className="mb-3"
       />
-      {list.length === 0 ? (
+      {loading ? (
+        <SkeletonList count={3} className="space-y-2" />
+      ) : list.length === 0 ? (
         <EmptyState
           icon={<SearchIcon size={24} />}
           title="No results"
@@ -384,22 +481,12 @@ export function SignalManagement() {
 
 /* ---------------- Users ---------------- */
 export function UserManagement() {
-  const people = [
-    ["Ade Balogun", "ade@example.com", "Member", "Free · Active", "Active"],
-    ["T. Adeyemi", "tayo@cegnal.io", "Analyst", "Staff", "Active"],
-    ["K. Musa", "khadija@cegnal.io", "Admin", "Staff", "Active"],
-    [
-      "R. Okoro",
-      "ronke@example.com",
-      "Member",
-      "Premium · Expiring 1 Nov",
-      "Active",
-    ],
-    ["J. Bello", "jide@example.com", "Member", "Free · Active", "Suspended"],
-  ];
+  const { items, loading } = useApiList("/users", {
+    map: (d) => d.users || [],
+  });
   const [q, setQ] = useState("");
-  const list = people.filter((p) =>
-    (p[0] + p[1]).toLowerCase().includes(q.toLowerCase()),
+  const list = items.filter((u) =>
+    `${u.name} ${u.email}`.toLowerCase().includes(q.toLowerCase()),
   );
   return (
     <Page title="User management" role="staff">
@@ -410,49 +497,70 @@ export function UserManagement() {
         aria-label="Search users"
         className="mb-3"
       />
-      <div className="space-y-2">
-        {list.map((p) => (
-          <Card key={p[1]} className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-bold">{p[0]}</div>
-                <div className="text-xs text-muted">{p[1]}</div>
+      {loading ? (
+        <SkeletonRows count={4} />
+      ) : (
+        <div className="space-y-2">
+          {list.map((u) => (
+            <Card key={u.email} className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-bold">{u.name}</div>
+                  <div className="text-xs text-muted">{u.email}</div>
+                </div>
+                <Tag tone={u.status === "Active" ? "success" : "danger"}>
+                  {u.status}
+                </Tag>
               </div>
-              <Tag tone={p[4] === "Active" ? "success" : "danger"}>{p[4]}</Tag>
-            </div>
-            <div className="mt-2 flex gap-2 text-[11px] font-semibold">
-              <Tag tone="muted">{p[2]}</Tag>
-              <Tag tone="muted">{p[3]}</Tag>
-            </div>
-          </Card>
-        ))}
-        {list.length === 0 && (
-          <EmptyState
-            icon={<SearchIcon size={24} />}
-            title="No users found"
-            body={`Nothing matches “${q}”.`}
-          />
-        )}
-      </div>
+              <div className="mt-2 flex gap-2 text-[11px] font-semibold">
+                <Tag tone="muted">{u.role}</Tag>
+                <Tag tone="muted">{u.planLabel}</Tag>
+              </div>
+            </Card>
+          ))}
+          {list.length === 0 && (
+            <EmptyState
+              icon={<SearchIcon size={24} />}
+              title="No users found"
+              body={`Nothing matches “${q}”.`}
+            />
+          )}
+        </div>
+      )}
     </Page>
   );
 }
 
 /* ---------------- Plans admin ---------------- */
 export function PlansAdmin() {
+  const { items: plans } = useApiList("/plans", {
+    map: (d) => d.plans || [],
+  });
+  const { items: payments } = useApiList("/payments", {
+    map: (d) =>
+      (d.payments || []).map((p) => ({
+        ref: p.ref,
+        plan: p.planName,
+        date: new Date(p.date).toLocaleDateString(),
+        amount: p.amount,
+        status: p.status === "paid" ? "Paid" : p.status,
+      })),
+  });
   return (
     <Page title="Plans & subscriptions" role="staff">
       <h2 className="mb-3 text-[15px] font-bold">Plan configuration</h2>
       <div className="mb-6 space-y-3">
-        {[
-          ["Free", "₦0 · Basic access"],
-          ["Premium — Monthly", "₦5,000 · Full access (pre-launch pricing)"],
-        ].map(([n, d]) => (
-          <Card key={n} className="p-4">
+        {plans.map((p) => (
+          <Card key={p.id} className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-bold">{n}</div>
-                <div className="text-xs text-muted">{d}</div>
+                <div className="text-sm font-bold">
+                  {p.name}
+                  {p.interval === "per month" ? " — Monthly" : ""}
+                </div>
+                <div className="text-xs text-muted">
+                  {p.price} · {p.blurb}
+                </div>
               </div>
               <Button variant="secondary">Edit</Button>
             </div>
@@ -484,27 +592,34 @@ export function PlansAdmin() {
 
 /* ---------------- Audit log ---------------- */
 export function AuditLog() {
+  const { items, loading } = useApiList("/audit-log", {
+    map: (d) => d.auditLog || [],
+  });
   return (
     <Page title="Activity log" role="staff">
-      <ol className="space-y-3 border-l-2 border-line pl-4">
-        {auditLog.map((a, i) => (
-          <li key={i} className="relative">
-            <span
-              className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-gold"
-              aria-hidden="true"
-            />
-            <Card className="p-4">
-              <div className="text-sm font-semibold">{a.action}</div>
-              <div className="text-xs text-muted">
-                {a.actor} · {a.time}
-              </div>
-              <div className="mt-1 text-xs font-semibold text-gold">
-                {a.record}
-              </div>
-            </Card>
-          </li>
-        ))}
-      </ol>
+      {loading ? (
+        <SkeletonList count={3} className="space-y-3" />
+      ) : (
+        <ol className="space-y-3 border-l-2 border-line pl-4">
+          {items.map((a) => (
+            <li key={a.id} className="relative">
+              <span
+                className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-gold"
+                aria-hidden="true"
+              />
+              <Card className="p-4">
+                <div className="text-sm font-semibold">{a.action}</div>
+                <div className="text-xs text-muted">
+                  {a.actor} · {a.time}
+                </div>
+                <div className="mt-1 text-xs font-semibold text-gold">
+                  {a.record}
+                </div>
+              </Card>
+            </li>
+          ))}
+        </ol>
+      )}
     </Page>
   );
 }

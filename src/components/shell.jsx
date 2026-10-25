@@ -1,6 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import { NavLink, Link, useNavigate } from "react-router-dom";
-import { user, notifications } from "../lib/data";
+import appLogo from "../assets/Group 15776.png";
+import appIcon from "../assets/Frame 156243.png";
+import { useEffect, useState } from "react";
+import { api } from "../lib/api.js";
 import {
   HomeIcon,
   SignalIcon,
@@ -38,13 +41,10 @@ export function TopBar({ title, back, action }) {
         ) : (
           <Link
             to="/"
-            className="flex items-center gap-2"
+            className="flex items-center"
             aria-label="Cegnal home"
           >
-            <BrandMark />
-            <span className="text-[15px] font-extrabold tracking-tight text-ink">
-              Cegnal
-            </span>
+            <AppLogo height={44} />
           </Link>
         )}
         {title && (
@@ -71,27 +71,66 @@ export function BackButton() {
   );
 }
 
-export function BrandMark({ size = 28 }) {
+/* Full logo (wordmark + icon). Use in headers and auth screens.
+   Has a fixed black background so the wordmark stays visible on any theme.
+   The image keeps its natural aspect ratio (no squashing/compression). */
+export function AppLogo({ height = 40, className = "" }) {
   return (
     <span
-      aria-hidden="true"
-      style={{ width: size, height: size, fontSize: size * 0.5 }}
-      className="inline-flex items-center justify-center rounded-lg bg-ink font-black text-gold"
+      className="inline-flex items-center rounded-lg"
+      style={{
+        background: "#0b0b0b",
+        padding: `${Math.round(height * 0.09)}px ${Math.round(height * 0.35)}px`,
+      }}
     >
-      C
+      <img
+        src={appLogo}
+        alt="Cegnal"
+        style={{ height, width: "auto" }}
+        className={`inline-block object-contain ${className}`}
+      />
     </span>
   );
 }
 
+export function BrandMark({ size = 28 }) {
+  return (
+    <img
+      src={appIcon}
+      alt=""
+      aria-hidden="true"
+      style={{ width: size, height: size }}
+      className="inline-block rounded-lg object-contain"
+    />
+  );
+}
+
+/* Unread notification count, straight from the database. */
+function useUnreadCount() {
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    api("/notifications")
+      .then((d) => {
+        if (!cancelled) setUnread(d.unread || 0);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return unread;
+}
+
 export function BottomNav({ role }) {
   const tabs = role === "member" ? memberTabs : roleTabs;
-  const unread = notifications.filter((n) => !n.read).length;
+  const unread = useUnreadCount();
   return (
     <nav
-      className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface"
+      className="safe-bottom app-fixed fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface"
       aria-label="Primary"
     >
-      <div className="mx-auto flex max-w-[480px] md:max-w-[768px] xl:max-w-[1104px]">
+      <div className="mx-auto flex max-w-[480px]">
         {tabs.map((t) => (
           <NavLink
             key={t.to}
@@ -132,7 +171,7 @@ export function Page({
   action,
   children,
   role = "member",
-  wide = false,
+  _wide = false,
 }) {
   return (
     <div className="app-max app-page">

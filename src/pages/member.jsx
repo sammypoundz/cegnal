@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { Page } from "../components/shell";
 import {
   Card,
@@ -17,8 +17,9 @@ import {
   Select,
 } from "../components/ui";
 import { SignalCard, RiskDisclaimer } from "../components/signal";
-import { signals, user, notifications, payments, risks } from "../lib/data";
 import { getTheme, toggleTheme } from "../lib/theme";
+import { useAuth } from "../lib/auth.jsx";
+import { api } from "../lib/api.js";
 import {
   SearchIcon,
   HeartIcon,
@@ -39,12 +40,14 @@ import {
 
 /* ---------------- Dashboard ---------------- */
 export function Dashboard() {
-  const premium = user.plan === "Premium";
+  const { user: me } = useAuth();
+  const profile = me || { name: "there", plan: "free", planStatus: "active" };
+  const premium = (profile.plan === "premium" || profile.plan === "Premium");
   return (
     <Page title="Home">
       <section className="mb-5">
         <h1 className="text-xl font-extrabold text-ink">
-          Good afternoon, {user.name.split(" ")[0]}
+          Good afternoon, {(profile.name || "there").split(" ")[0]}
         </h1>
         <Card className="mt-3 flex items-center justify-between p-4">
           <div>
@@ -52,7 +55,7 @@ export function Dashboard() {
               Your access
             </div>
             <div className="text-[15px] font-bold text-body">
-              {user.plan} plan · Active
+              {(profile.plan === "premium" || profile.plan === "Premium") ? "Premium" : "Free"} plan · Active
             </div>
           </div>
           {premium ? (
@@ -69,11 +72,7 @@ export function Dashboard() {
 
       <section className="mb-5">
         <h2 className="mb-3 text-[15px] font-bold">Latest signals</h2>
-        <div className="space-y-3">
-          {signals.slice(0, 2).map((s) => (
-            <SignalCard key={s.id} signal={s} isPremiumUser={premium} />
-          ))}
-        </div>
+        <LatestSignals premium={premium} />
         <Link
           to="/app/signals"
           className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-gold"
@@ -85,20 +84,7 @@ export function Dashboard() {
       <section className="mb-5">
         <h2 className="mb-3 text-[15px] font-bold">Saved signals</h2>
         <div className="space-y-2">
-          {[signals[1]].map((s) => (
-            <Card key={s.id} className="flex items-center justify-between p-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm">{s.instrument}</span>
-                  <DirectionBadge direction={s.direction} />
-                </div>
-                <div className="mt-0.5 flex items-center gap-1 text-xs text-muted">
-                  <HeartIcon size={12} filled /> Saved · {s.timeframe}
-                </div>
-              </div>
-              <StatusChip status={s.status} />
-            </Card>
-          ))}
+          <SavedPreview />
           <Link
             to="/app/saved"
             className="inline-flex items-center gap-1 text-sm font-semibold text-gold"
@@ -110,20 +96,7 @@ export function Dashboard() {
 
       <section className="mb-5">
         <h2 className="mb-3 text-[15px] font-bold">Recent updates</h2>
-        <div className="space-y-2">
-          {notifications.slice(0, 2).map((n) => (
-            <Card
-              key={n.id}
-              className={`p-4 ${!n.read ? "border-l-4 border-l-gold" : ""}`}
-            >
-              <div className="text-xs font-semibold text-gold">
-                {n.category}
-              </div>
-              <div className="text-sm font-semibold text-body">{n.title}</div>
-              <div className="text-xs text-muted">{n.time}</div>
-            </Card>
-          ))}
-        </div>
+        <RecentUpdates />
       </section>
 
       {!premium && (
@@ -141,6 +114,133 @@ export function Dashboard() {
       )}
       <RiskDisclaimer />
     </Page>
+  );
+}
+
+/* Small shared hook: fetch a list from the API. */
+function useApiList(path, { map = (d) => d } = {}) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    api(path)
+      .then((data) => {
+        if (!cancelled) setItems(map(data));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- map is stable per call site
+  }, [path]);
+  return { items, loading };
+}
+
+/* Dashboard: latest two signals straight from the API. */
+function LatestSignals({ premium }) {
+  const { items, loading } = useApiList("/signals?limit=2", {
+    map: (d) =>
+      (d.signals || []).map((s) => ({
+        ...s,
+        status: s.status.replace(/_/g, "-"),
+      })),
+  });
+  if (loading)
+    return (
+      <div className="space-y-3">
+        <SkeletonCard />
+        <SkeletonCard />
+      </div>
+    );
+  if (!items.length)
+    return (
+      <EmptyState
+        icon={<SearchIcon size={24} />}
+        title="No signals yet"
+        body="Analyst setups will appear here as soon as they are published."
+      />
+    );
+  return (
+    <div className="space-y-3">
+      {items.map((s) => (
+        <SignalCard key={s.id} signal={s} isPremiumUser={premium} />
+      ))}
+    </div>
+  );
+}
+
+/* Dashboard: first saved-signal preview from localStorage saves. */
+function SavedPreview() {
+  const savedIds = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("cegnal-saved") || "[]");
+    } catch {
+      return [];
+    }
+  }, []);
+  const { items, loading } = useApiList(
+    savedIds.length ? `/signals?limit=50` : null,
+    { map: (d) => (d.signals || []).filter((s) => savedIds.includes(s.id)).slice(0, 1) },
+  );
+  if (!savedIds.length || (!loading && !items.length)) {
+    return (
+      <EmptyState
+        icon={<HeartIcon size={24} />}
+        title="Nothing saved yet"
+        body="Save signals from the feed to follow their updates here."
+      />
+    );
+  }
+  if (loading) return <SkeletonCard />;
+  return items.map((s) => (
+    <Card key={s.id} className="flex items-center justify-between p-4">
+      <div>
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-sm">{s.instrument}</span>
+          <DirectionBadge direction={s.direction} />
+        </div>
+        <div className="mt-0.5 flex items-center gap-1 text-xs text-muted">
+          <HeartIcon size={12} filled /> Saved · {s.timeframe}
+        </div>
+      </div>
+      <StatusChip status={s.status} />
+    </Card>
+  ));
+}
+
+/* Dashboard: two most recent notifications from the API. */
+function RecentUpdates() {
+  const { items, loading } = useApiList("/notifications", {
+    map: (d) =>
+      (d.notifications || []).slice(0, 2).map((n) => ({
+        id: n.id,
+        read: n.read,
+        category: n.category.replace(/_/g, " "),
+        title: n.title,
+        time: new Date(n.createdAt).toLocaleString(),
+      })),
+  });
+  if (loading) return <SkeletonCard />;
+  if (!items.length)
+    return (
+      <p className="text-sm text-muted">No updates yet.</p>
+    );
+  return (
+    <div className="space-y-2">
+      {items.map((n) => (
+        <Card
+          key={n.id}
+          className={`p-4 ${!n.read ? "border-l-4 border-l-gold" : ""}`}
+        >
+          <div className="text-xs font-semibold text-gold">{n.category}</div>
+          <div className="text-sm font-semibold text-body">{n.title}</div>
+          <div className="text-xs text-muted">{n.time}</div>
+        </Card>
+      ))}
+    </div>
   );
 }
 
@@ -162,7 +262,8 @@ const FILTERS = {
 };
 
 export function SignalFeed({ premiumOnly = false }) {
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [list, setList] = useState([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [f, setF] = useState({
     market: "All markets",
@@ -171,13 +272,34 @@ export function SignalFeed({ premiumOnly = false }) {
     status: "Any status",
     tier: "Any access",
   });
-  const [saved, setSaved] = useState(["sgn-1041"]);
+  const [saved, setSaved] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("cegnal-saved") || "[]");
+    } catch {
+      return [];
+    }
+  });
   const [toast, setToast] = useState("");
   const [visible, setVisible] = useState(3);
 
+  useEffect(() => {
+    api("/signals")
+      .then(({ signals: list }) =>
+        setList(
+          list.map((s) => ({
+            ...s,
+            instrument: s.instrument,
+            status: s.status.replace(/_/g, "-"),
+          })),
+        ),
+      )
+        .catch(() => {})
+        .finally(() => setLoading(false));
+  }, []);
+
   const filtered = useMemo(
     () =>
-      signals.filter(
+      list.filter(
         (s) =>
           (f.market === "All markets" || s.market === f.market) &&
           (f.direction === "Any direction" || s.direction === f.direction) &&
@@ -186,17 +308,19 @@ export function SignalFeed({ premiumOnly = false }) {
             s.status === f.status.toLowerCase().replace(" ", "-")) &&
           (f.tier === "Any access" || s.tier === f.tier),
       ),
-    [f],
+    [f, list],
   );
 
   const active = Object.entries(f).filter(
-    ([k, v]) => !v.startsWith("All") && !v.startsWith("Any"),
+    ([, v]) => !v.startsWith("All") && !v.startsWith("Any"),
   );
 
   const save = (id) => {
-    setSaved(
-      saved.includes(id) ? saved.filter((x) => x !== id) : [...saved, id],
-    );
+    const next = saved.includes(id)
+      ? saved.filter((x) => x !== id)
+      : [...saved, id];
+    setSaved(next);
+    localStorage.setItem("cegnal-saved", JSON.stringify(next));
     setToast(saved.includes(id) ? "Removed from saved" : "Saved to your list");
     setTimeout(() => setToast(""), 1800);
   };
@@ -373,15 +497,46 @@ function FilterSheet({ f, setF, onClose, count }) {
 export function SignalDetail() {
   const { id } = useParams();
   const nav = useNavigate();
-  const premium = user.plan === "Premium";
+  const { user: me } = useAuth();
+  const premium = me?.plan === "premium" || me?.plan === "Premium";
   const [saved, setSaved] = useState(false);
-  const signal = signals.find((s) => s.id === id);
-  if (!signal) {
+  const [signal, setSignal] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    api(`/signals/${id}`)
+      .then((data) => {
+        if (!cancelled) setSignal(data.signal);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  if (loading) {
+    return (
+      <Page title="Signal" back>
+        <SkeletonCard />
+      </Page>
+    );
+  }
+  if (error || !signal) {
     return (
       <Page title="Signal" back>
         <ErrorState
           title="Signal unavailable"
-          body="This signal no longer exists or is not visible on your plan."
+          body={
+            error ||
+            "This signal no longer exists or is not visible on your plan."
+          }
           onRetry={() => nav("/app/signals")}
         />
       </Page>
@@ -419,7 +574,7 @@ export function SignalDetail() {
             <h3 className="mb-1 text-[15px] font-bold">Levels</h3>
             <LevelRow label="Entry range" value={signal.entry} tone="gold" />
             <LevelRow label="Stop loss" value={signal.stopLoss} tone="danger" />
-            {signal.targets.map((t, i) => (
+            {(signal.targets || []).map((t, i) => (
               <LevelRow
                 key={t}
                 label={`Target ${i + 1}`}
@@ -438,7 +593,7 @@ export function SignalDetail() {
               <em>Analyst commentary — not verified outcome data.</em>
             </p>
           </Card>
-          {signal.revisions.length > 0 && (
+          {(signal.revisions || []).length > 0 && (
             <Card className="mb-4 p-4">
               <h3 className="mb-3 text-[15px] font-bold">Update history</h3>
               <ol className="space-y-3 border-l-2 border-line pl-4">
@@ -497,34 +652,52 @@ function LockedDetail({ onUpgrade }) {
 
 /* ---------------- History ---------------- */
 export function SignalHistory() {
-  const done = signals.filter((s) =>
-    ["closed", "cancelled", "expired", "stop-loss", "target-reached"].includes(
-      s.status,
-    ),
-  );
+  const { items, loading } = useApiList("/signals?limit=50", {
+    map: (d) =>
+      (d.signals || [])
+        .map((s) => ({ ...s, status: s.status.replace(/_/g, "-") }))
+        .filter((s) =>
+          ["closed", "cancelled", "expired", "stop-loss", "target-reached"].includes(
+            s.status,
+          ),
+        ),
+  });
   return (
     <Page title="Signal history" back>
       <p className="mb-4 text-sm text-muted">
         Historical records of completed, cancelled and expired signals. These
         are records, not performance claims.
       </p>
-      <div className="space-y-3">
-        {done.map((s) => (
-          <Card key={s.id} className="p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="font-bold">{s.instrument}</span>
-                <DirectionBadge direction={s.direction} />
+      {loading ? (
+        <div className="space-y-3">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={<ClockHistoryIcon size={24} />}
+          title="No history yet"
+          body="Completed signals will appear here."
+        />
+      ) : (
+        <div className="space-y-3">
+          {items.map((s) => (
+            <Card key={s.id} className="p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold">{s.instrument}</span>
+                  <DirectionBadge direction={s.direction} />
+                </div>
+                <StatusChip status={s.status} />
               </div>
-              <StatusChip status={s.status} />
-            </div>
-            <div className="text-xs text-muted">
-              Closed {s.updated} · Entry {s.entry} · SL {s.stopLoss} · Targets{" "}
-              {s.targets.join(" / ")}
-            </div>
-          </Card>
-        ))}
-      </div>
+              <div className="text-xs text-muted">
+                Closed {s.updated} · Entry {s.entry} · SL {s.stopLoss} · Targets{" "}
+                {(s.targets || []).join(" / ")}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
       <RiskDisclaimer className="mt-4" />
     </Page>
   );
@@ -532,10 +705,24 @@ export function SignalHistory() {
 
 /* ---------------- Saved ---------------- */
 export function Saved() {
-  const saved = signals.filter((s) => ["sgn-1041", "sgn-1039"].includes(s.id));
+  const savedIds = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("cegnal-saved") || "[]");
+    } catch {
+      return [];
+    }
+  })();
+  const { items, loading } = useApiList(
+    savedIds.length ? "/signals?limit=50" : null,
+    { map: (d) => (d.signals || []).filter((s) => savedIds.includes(s.id)) },
+  );
   return (
     <Page title="Saved">
-      {saved.length === 0 ? (
+      {loading ? (
+        <div className="space-y-3">
+          <SkeletonCard />
+        </div>
+      ) : items.length === 0 ? (
         <EmptyState
           icon={<HeartIcon size={24} />}
           title="Nothing saved yet"
@@ -548,7 +735,7 @@ export function Saved() {
         />
       ) : (
         <div className="space-y-3">
-          {saved.map((s) => (
+          {items.map((s) => (
             <SignalCard key={s.id} signal={s} />
           ))}
         </div>
@@ -559,8 +746,37 @@ export function Saved() {
 
 /* ---------------- Notifications ---------------- */
 export function Notifications() {
-  const [items, setItems] = useState(notifications);
+  const [items, setItems] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    api("/notifications")
+      .then(({ notifications: list }) =>
+        setItems(
+          list.map((n) => ({
+            id: n.id,
+            read: n.read,
+            category: n.category.replace(/_/g, " "),
+            title: n.title,
+            body: n.body,
+            link: n.link || "/app/signals",
+            time: new Date(n.createdAt).toLocaleString(),
+          })),
+        ),
+      )
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
+
   const unread = items.filter((n) => !n.read).length;
+  const markAll = () => {
+    setItems(items.map((n) => ({ ...n, read: true })));
+    api("/notifications/mark-all-read", { method: "POST" }).catch(() => {});
+  };
+  const markOne = (id) => {
+    setItems(items.map((x) => (x.id === id ? { ...x, read: true } : x)));
+    api(`/notifications/${id}/read`, { method: "PATCH" }).catch(() => {});
+  };
   return (
     <Page
       title="Notifications"
@@ -568,14 +784,20 @@ export function Notifications() {
         unread > 0 ? (
           <button
             className="px-2 text-sm font-semibold text-gold"
-            onClick={() => setItems(items.map((n) => ({ ...n, read: true })))}
+            onClick={markAll}
           >
             Mark all read
           </button>
         ) : null
       }
     >
-      {items.length === 0 ? (
+      {!loaded ? (
+        <EmptyState
+          icon={<BellIcon size={24} />}
+          title="Loading…"
+          body="Fetching your notifications."
+        />
+      ) : items.length === 0 ? (
         <EmptyState
           icon={<BellIcon size={24} />}
           title="No notifications"
@@ -587,11 +809,7 @@ export function Notifications() {
             <Link
               key={n.id}
               to={n.link}
-              onClick={() =>
-                setItems(
-                  items.map((x) => (x.id === n.id ? { ...x, read: true } : x)),
-                )
-              }
+              onClick={() => markOne(n.id)}
             >
               <Card
                 className={`flex gap-3 p-4 ${!n.read ? "border-l-4 border-l-gold" : ""}`}
@@ -628,9 +846,39 @@ export function Notifications() {
 
 /* ---------------- Subscription ---------------- */
 export function Subscription() {
-  const premium = user.plan === "Premium";
+  const { user: me, refresh } = useAuth();
+  const premium = me?.plan === "premium" || me?.plan === "Premium";
+  const [paymentsList, setPaymentsList] = useState([]);
   const [confirm, setConfirm] = useState(false);
   const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    api("/payments")
+      .then(({ payments: list }) =>
+        setPaymentsList(
+          list.map((p) => ({
+            ref: p.ref,
+            plan: p.planName,
+            date: new Date(p.date).toLocaleDateString(),
+            amount: p.amount,
+            status: p.status === "paid" ? "Paid" : p.status,
+          })),
+        ),
+      )
+      .catch(() => {});
+  }, []);
+
+  const cancelPlan = async () => {
+    setConfirm(false);
+    try {
+      await api("/payments/cancel", { method: "POST" });
+      await refresh();
+      setToast("Plan cancelled");
+    } catch (err) {
+      setToast(err.message);
+    }
+    setTimeout(() => setToast(""), 2500);
+  };
   return (
     <Page title="Subscription">
       <Card className="mb-4 p-5">
@@ -674,9 +922,9 @@ export function Subscription() {
       </Card>
 
       <h2 className="mb-3 text-[15px] font-bold">Payment history</h2>
-      {premium ? (
+      {paymentsList.length > 0 ? (
         <div className="space-y-2">
-          {payments.map((p) => (
+          {paymentsList.map((p) => (
             <Card key={p.ref} className="flex items-center justify-between p-4">
               <div>
                 <div className="text-sm font-semibold">{p.plan}</div>
@@ -708,11 +956,7 @@ export function Subscription() {
         confirmLabel="Cancel plan"
         body="Your premium access will continue until 1 Nov 2026 and will not renew after that. Are you sure?"
         onClose={() => setConfirm(false)}
-        onConfirm={() => {
-          setConfirm(false);
-          setToast("Cancellation scheduled — access until 1 Nov 2026");
-          setTimeout(() => setToast(""), 2500);
-        }}
+        onConfirm={cancelPlan}
       />
       <Toast message={toast} />
     </Page>
@@ -721,21 +965,35 @@ export function Subscription() {
 
 /* ---------------- Profile ---------------- */
 export function Profile() {
+  const { user: me, logout } = useAuth();
+  const profile = me || { name: "?", email: "", plan: "free", timezone: "" };
+  const nav = useNavigate();
   const [toast, setToast] = useState("");
   const flash = (m) => {
     setToast(m);
     setTimeout(() => setToast(""), 1800);
   };
+  const doLogout = () => {
+    logout();
+    nav("/login");
+  };
   return (
     <Page title="Profile">
       <Card className="mb-4 flex items-center gap-4 p-5">
         <span className="flex h-14 w-14 items-center justify-center rounded-full bg-ink text-lg font-black text-gold">
-          AB
+          {(profile.name || "?")
+            .split(" ")
+            .map((w) => w[0])
+            .slice(0, 2)
+            .join("")
+            .toUpperCase()}
         </span>
         <div>
-          <div className="text-[15px] font-bold">{user.name}</div>
-          <div className="text-sm text-muted">{user.email}</div>
-          <Tag tone="gold">{user.plan} member</Tag>
+          <div className="text-[15px] font-bold">{profile.name}</div>
+          <div className="text-sm text-muted">{profile.email}</div>
+          <Tag tone="gold">
+            {(profile.plan === "premium" ? "Premium" : profile.plan) || "Free"} member
+          </Tag>
         </div>
       </Card>
 
@@ -744,9 +1002,9 @@ export function Profile() {
           {
             icon: <MailIcon size={18} />,
             title: "Email verification",
-            value: user.emailVerified ? "Verified" : "Pending",
+            value: profile.emailVerified ? "Verified" : "Pending",
           },
-          { icon: <ClockIcon size={18} />, title: "Timezone", value: user.timezone },
+          { icon: <ClockIcon size={18} />, title: "Timezone", value: profile.timezone },
           {
             icon: <KeyIcon size={18} />,
             title: "Password & security",
@@ -818,9 +1076,7 @@ export function Profile() {
         </Link>
         <button
           className="flex w-full items-center gap-3 p-4 text-left text-sm font-semibold text-danger"
-          onClick={() =>
-            flash("Log out confirmed in full release (placeholder).")
-          }
+          onClick={doLogout}
         >
           <LogoutIcon size={18} /> Log out
         </button>

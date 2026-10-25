@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import {
-  zoneTraders,
-  zoneNotifications,
   zoneCatalogLabels,
 } from "../lib/zoneData";
+import { useZoneNotifications, useZoneSubscriptions, useZoneTraders } from "../lib/zoneApi";
+import { useNow } from "../lib/useNow";
+import { useAuth } from "../lib/auth.jsx";
+import { AppLogo } from "./shell";
 import {
   GridIcon,
   SignalIcon,
@@ -70,7 +72,13 @@ export function ZoneStars({ rating = 0, size = 14, max = 5 }) {
   );
 }
 
-export function ZoneButton({ variant = "blue", className = "", ...props }) {
+export function ZoneButton({
+  variant = "blue",
+  className = "",
+  loading = false,
+  children,
+  ...props
+}) {
   const variants = {
     blue: "bg-z-blue text-white active:brightness-95 hover:brightness-105",
     charcoal: "bg-z-charcoal text-white hover:bg-[#2b2b2b]",
@@ -80,7 +88,16 @@ export function ZoneButton({ variant = "blue", className = "", ...props }) {
     <button
       className={`inline-flex min-h-[44px] items-center justify-center rounded-[10px] px-4 text-sm font-semibold transition ${variants[variant]} ${className}`}
       {...props}
-    />
+    >
+      {loading ? (
+        <span
+          aria-hidden="true"
+          className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+        />
+      ) : (
+        children
+      )}
+    </button>
   );
 }
 
@@ -118,7 +135,8 @@ export function ZoneHeader({ title, back = false, right = null }) {
 }
 
 export function NotificationButton() {
-  const unread = zoneNotifications.filter((n) => !n.read).length;
+  const { notifications } = useZoneNotifications();
+  const unread = notifications.filter((n) => !n.read).length;
   return (
     <Link
       to="/zone/notifications"
@@ -173,7 +191,7 @@ const drawerLinks = [
   { to: "/zone?tab=zones", label: "Signal Zones", Icon: SignalIcon },
   { to: "/zone?tab=top", label: "Top Traders", Icon: StarIcon },
   { to: "/zone/subscriptions", label: "My Subscriptions", Icon: CheckIcon },
-  { to: "/zone/checkout", label: "Transaction History", Icon: WalletIcon },
+  { to: "/zone/transactions", label: "Transaction History", Icon: WalletIcon },
   { to: "/zone/analyst", label: "Analyst Studio", Icon: StarIcon },
   { to: "/zone/notifications", label: "Notifications", Icon: BellIcon },
   { to: "/zone/settings", label: "Settings", Icon: GearIcon },
@@ -181,6 +199,9 @@ const drawerLinks = [
 ];
 
 export function ZoneDrawer({ open, onClose }) {
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose}>
@@ -191,9 +212,9 @@ export function ZoneDrawer({ open, onClose }) {
         className="safe-top h-full w-[280px] z-surface shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-z-line px-4 py-4">
-          <span className="text-lg font-extrabold tracking-tight text-z-ink">
-            Signal Zone
+        <div className="flex items-center justify-between border-b border-z-line px-4 py-3">
+          <span className="flex items-center">
+            <AppLogo height={56} />
           </span>
           <button
             onClick={onClose}
@@ -218,7 +239,7 @@ export function ZoneDrawer({ open, onClose }) {
             </Link>
           ))}
           <button
-            onClick={onClose}
+            onClick={() => setConfirmLogout(true)}
             className="mt-2 flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-left text-[15px] font-medium text-z-red hover:bg-z-gray/60"
           >
             <span aria-hidden="true" className="flex w-5 justify-center">
@@ -228,6 +249,55 @@ export function ZoneDrawer({ open, onClose }) {
           </button>
         </nav>
       </aside>
+
+      {/* Logout confirmation */}
+      {confirmLogout && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70"
+          onClick={() => setConfirmLogout(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm logout"
+        >
+          <div
+            className="mx-4 w-full max-w-sm rounded-3xl z-surface p-5"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-[17px] font-bold text-z-ink">Log out?</h3>
+              <button
+                onClick={() => setConfirmLogout(false)}
+                aria-label="Close"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-z-gray text-z-ink"
+              >
+                <CloseIcon size={14} />
+              </button>
+            </div>
+            <p className="text-[13px] leading-relaxed text-z-mute">
+              You'll need to log in again to access your zones and signals.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setConfirmLogout(false)}
+                className="min-h-[46px] rounded-xl border border-z-line text-[14px] font-bold text-z-ink hover:bg-z-gray/50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setConfirmLogout(false);
+                  onClose();
+                  logout();
+                  navigate("/login", { replace: true });
+                }}
+                className="min-h-[46px] rounded-xl bg-z-red text-[14px] font-bold text-white active:brightness-95"
+              >
+                Log out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -250,7 +320,7 @@ export function ZoneBottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="safe-bottom fixed inset-x-0 bottom-0 z-40"
+      className="safe-bottom app-fixed fixed inset-x-0 bottom-0 z-40"
     >
       <div className="mx-auto w-full max-w-[480px] px-4 pb-3">
         <div
@@ -472,7 +542,27 @@ export function CategoryTabs({ active, onChange }) {
 /* ---------------- Cards ---------------- */
 
 export function SubscriptionCard() {
-  const due = 1;
+  const { joined, live: subsLive } = useZoneSubscriptions();
+  const { traders } = useZoneTraders();
+
+  // Active zones the user has actually paid for; "due" only counts real
+  // upcoming renewals within the next 7 days (or already lapsed ones).
+  const active = subsLive ? joined : [];
+  const now = useNow();
+  const dueSoon = active.filter(
+    (j) =>
+      j.renewsAt &&
+      now &&
+      new Date(j.renewsAt).getTime() - now.getTime() < 7 * 86_400_000,
+  ).length;
+  const nextRenewal = active
+    .filter((j) => j.renewsAt)
+    .sort(
+      (a, b) =>
+        new Date(a.renewsAt).getTime() - new Date(b.renewsAt).getTime(),
+    )[0];
+
+  const featured = traders.slice(0, 1);
   return (
     <section className="z-card p-4">
       <div className="flex items-center gap-3">
@@ -496,16 +586,52 @@ export function SubscriptionCard() {
           Upcoming subscription
         </h2>
       </div>
-      <div className="mt-3 flex items-center justify-between">
-        <span className="text-[13px] text-z-mute">{due} Payment Due</span>
-        <Link to="/zone/checkout">
-          <ZoneButton className="min-h-[36px] px-4 text-[13px]">
-            Subscribe
-          </ZoneButton>
-        </Link>
-      </div>
+
+      {active.length > 0 ? (
+        <>
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-[13px] text-z-mute">
+              {dueSoon > 0
+                ? `${dueSoon} renewal${dueSoon > 1 ? "s" : ""} due soon`
+                : `${active.length} zone${active.length > 1 ? "s" : ""} active`}
+            </span>
+            <Link to="/zone/subscriptions">
+              <ZoneButton
+                variant="outline"
+                className="min-h-[36px] px-4 text-[13px]"
+              >
+                Manage
+              </ZoneButton>
+            </Link>
+          </div>
+          {nextRenewal && (
+            <div className="mt-2 flex items-center gap-2 rounded-xl bg-z-blue-soft/50 px-3 py-2.5">
+              <span
+                aria-hidden="true"
+                className={`h-2 w-2 rounded-full ${
+                  nextRenewal.countdown === "Renewal due" ? "bg-z-red" : "bg-success"
+                }`}
+              />
+              <span className="text-[12px] font-semibold text-z-ink">
+                {nextRenewal.countdown === "Renewal due"
+                  ? "Renewal due — resubscribe to keep access"
+                  : `Next renewal in ${nextRenewal.countdown}`}
+              </span>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="mt-3 flex items-center justify-between">
+          <span className="text-[13px] text-z-mute">No Payment Due</span>
+          <Link to="/zone?tab=zones">
+            <ZoneButton className="min-h-[36px] px-4 text-[13px]">
+              Subscribe
+            </ZoneButton>
+          </Link>
+        </div>
+      )}
       <hr className="my-3 border-z-line" />
-      {zoneTraders.slice(0, 1).map((t) => (
+      {featured?.map((t) => (
         <Link
           key={t.id}
           to={`/zone/trader/${t.id}`}
@@ -569,6 +695,11 @@ export function SignalZoneCard({ zone }) {
         <span className="text-[16px] font-semibold text-z-ink">
           {zone.name}
         </span>
+        {zone.sponsored && (
+          <span className="rounded-full bg-[#3a2c07] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#f2c14e]">
+            Sponsored
+          </span>
+        )}
         <div className="ml-auto flex flex-col items-end">
           <span className="text-[12px] text-z-mute">
             {zone.reviewCount} Reviews

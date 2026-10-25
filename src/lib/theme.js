@@ -3,6 +3,8 @@
    flip the class and remember the choice (localStorage, falls back to the system
    preference). Safe to import anywhere; applies immediately on load. */
 
+import { useEffect, useState } from "react";
+
 const KEY = "cegnal-theme";
 
 export function getTheme() {
@@ -39,3 +41,18 @@ export function toggleTheme() {
 })();
 
 export { apply as applyTheme };
+
+/* React hook: re-renders when the dark class on <html> changes,
+   so components that don't use token classes can adapt to the theme. */
+export function useTheme() {
+  const [theme, setThemeState] = useState(getTheme());
+  useEffect(() => {
+    const observer = new MutationObserver(() => setThemeState(getTheme()));
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
+  return theme;
+}

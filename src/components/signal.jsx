@@ -8,7 +8,7 @@ import {
   Button,
   LockedPanel,
 } from "./ui";
-import { risks } from "../lib/data";
+import { useRisks } from "../lib/api.js";
 import { HeartIcon, ClockIcon } from "./icons";
 
 export function SignalCard({ signal, isPremiumUser = true, saved, onSave }) {
@@ -87,6 +87,7 @@ export function SignalCard({ signal, isPremiumUser = true, saved, onSave }) {
 }
 
 export function RiskDisclaimer({ className = "" }) {
+  const { risks } = useRisks();
   return (
     <p
       className={`rounded-xl bg-canvas p-3 text-[11px] leading-relaxed text-muted border border-line ${className}`}

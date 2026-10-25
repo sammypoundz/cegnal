@@ -1,17 +1,16 @@
 import React, { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { AuthProvider, useAuth } from "../lib/auth.jsx";
 import { Landing, HowItWorks, Plans, Faq, Legal } from "../pages/public";
 import { default as IndexOnboarding } from "../components/Onboarding";
 import {
   Login,
   Register,
   ForgotPassword,
-  ResetPassword,
   VerifyEmail,
   Onboarding,
 } from "../pages/auth";
 import {
-  Dashboard,
   SignalFeed,
   SignalDetail,
   SignalHistory,
@@ -37,6 +36,7 @@ import {
   ZoneNotificationsPage,
   ZoneCheckoutPage,
   ZoneSubscriptionsPage,
+  ZoneTransactionsPage,
   ZoneProfilePage,
   ZoneSettingsPage,
   AnalystDashboard,
@@ -45,10 +45,33 @@ import {
 export default function App() {
   const [role, setRole] = useState("member");
   return (
-    <BrowserRouter>
-      <AppRoutes role={role} setRole={setRole} />
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <AppRoutes role={role} setRole={setRole} />
+      </BrowserRouter>
+    </AuthProvider>
   );
+}
+
+/* Redirects signed-out users to /login; shows nothing while the
+   session is being restored from the stored token.
+   Unverified users must complete email verification first. */
+function RequireAuth({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!user.emailVerified) return <Navigate to="/verify-email" replace />;
+  return children;
+}
+
+/* Keeps signed-in users out of login/register. Unverified users go to
+   /verify-email instead of the app, so signup lands on the OTP page. */
+function PublicOnly({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (user)
+    return <Navigate to={user.emailVerified ? "/app" : "/verify-email"} replace />;
+  return children;
 }
 
 function AppRoutes({ role }) {
@@ -63,43 +86,50 @@ function AppRoutes({ role }) {
         <Route path="/legal/:kind" element={<LegalRoute />} />
 
         {/* Authentication */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route
+          path="/login"
+          element={<PublicOnly><Login /></PublicOnly>}
+        />
+        <Route
+          path="/register"
+          element={<PublicOnly><Register /></PublicOnly>}
+        />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/reset-password" element={<Navigate to="/forgot-password" replace />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/onboarding" element={<Onboarding />} />
 
-        {/* Member app */}
-        <Route path="/app" element={<Dashboard />} />
-        <Route path="/app/signals" element={<SignalFeed />} />
-        <Route path="/app/signals/:id" element={<SignalDetail />} />
-        <Route path="/app/history" element={<SignalHistory />} />
-        <Route path="/app/saved" element={<Saved />} />
-        <Route path="/app/notifications" element={<Notifications />} />
-        <Route path="/app/subscription" element={<Subscription />} />
-        <Route path="/app/profile" element={<Profile />} />
+        {/* Member app — Zone is the main app interface */}
+        <Route path="/app" element={<RequireAuth><ZoneApp /></RequireAuth>} />
+        <Route path="/app/signals" element={<RequireAuth><SignalFeed /></RequireAuth>} />
+        <Route path="/app/signals/:id" element={<RequireAuth><SignalDetail /></RequireAuth>} />
+        <Route path="/app/history" element={<RequireAuth><SignalHistory /></RequireAuth>} />
+        <Route path="/app/saved" element={<RequireAuth><Saved /></RequireAuth>} />
+        <Route path="/app/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
+        <Route path="/app/subscription" element={<RequireAuth><Subscription /></RequireAuth>} />
+        <Route path="/app/profile" element={<RequireAuth><Profile /></RequireAuth>} />
 
         {/* Analyst / Admin */}
-        <Route path="/work" element={<WorkOverview role={role} />} />
-        <Route path="/work/signals" element={<SignalManagement />} />
-        <Route path="/work/signals/new" element={<SignalForm />} />
-        <Route path="/work/queue" element={<ReviewQueue />} />
-        <Route path="/work/users" element={<UserManagement />} />
-        <Route path="/work/plans" element={<PlansAdmin />} />
-        <Route path="/work/audit" element={<AuditLog />} />
+        <Route path="/work" element={<RequireAuth><WorkOverview role={role} /></RequireAuth>} />
+        <Route path="/work/signals" element={<RequireAuth><SignalManagement /></RequireAuth>} />
+        <Route path="/work/signals/new" element={<RequireAuth><SignalForm /></RequireAuth>} />
+        <Route path="/work/queue" element={<RequireAuth><ReviewQueue /></RequireAuth>} />
+        <Route path="/work/users" element={<RequireAuth><UserManagement /></RequireAuth>} />
+        <Route path="/work/plans" element={<RequireAuth><PlansAdmin /></RequireAuth>} />
+        <Route path="/work/audit" element={<RequireAuth><AuditLog /></RequireAuth>} />
 
         {/* Forex Signal Zone (mobile UI) */}
-        <Route path="/zone" element={<ZoneApp />} />
-        <Route path="/zone/analyst" element={<AnalystDashboard />} />
-        <Route path="/zone/traders" element={<ZoneTradersPage />} />
-        <Route path="/zone/trader/:traderId" element={<ZoneTraderProfile />} />
-        <Route path="/zone/room/:traderId" element={<ZoneRoom />} />
-        <Route path="/zone/notifications" element={<ZoneNotificationsPage />} />
-        <Route path="/zone/checkout" element={<ZoneCheckoutPage />} />
-        <Route path="/zone/subscriptions" element={<ZoneSubscriptionsPage />} />
-        <Route path="/zone/profile" element={<ZoneProfilePage />} />
-        <Route path="/zone/settings" element={<ZoneSettingsPage />} />
+        <Route path="/zone" element={<RequireAuth><ZoneApp /></RequireAuth>} />
+        <Route path="/zone/analyst" element={<RequireAuth><AnalystDashboard /></RequireAuth>} />
+        <Route path="/zone/traders" element={<RequireAuth><ZoneTradersPage /></RequireAuth>} />
+        <Route path="/zone/trader/:traderId" element={<RequireAuth><ZoneTraderProfile /></RequireAuth>} />
+        <Route path="/zone/room/:traderId" element={<RequireAuth><ZoneRoom /></RequireAuth>} />
+        <Route path="/zone/notifications" element={<RequireAuth><ZoneNotificationsPage /></RequireAuth>} />
+        <Route path="/zone/checkout" element={<RequireAuth><ZoneCheckoutPage /></RequireAuth>} />
+        <Route path="/zone/subscriptions" element={<RequireAuth><ZoneSubscriptionsPage /></RequireAuth>} />
+        <Route path="/zone/transactions" element={<RequireAuth><ZoneTransactionsPage /></RequireAuth>} />
+        <Route path="/zone/profile" element={<RequireAuth><ZoneProfilePage /></RequireAuth>} />
+        <Route path="/zone/settings" element={<RequireAuth><ZoneSettingsPage /></RequireAuth>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

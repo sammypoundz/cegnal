@@ -1,6 +1,6 @@
-import React from "react";
-import { Link } from "react-router-dom";
-import { Card, Button, Tag } from "../components/ui";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Card, Button, Tag, SkeletonList } from "../components/ui";
 import { RiskDisclaimer } from "../components/signal";
 import HeroSlider from "../components/HeroSlider";
 import {
@@ -10,17 +10,17 @@ import {
   ArrowUpIcon,
   ArrowRightIcon,
 } from "../components/icons";
-import { plans, faqs } from "../lib/data";
+import { usePlans, useFaqs, useLegal } from "../lib/api.js";
+import { payWithPaystack } from "../lib/api.js";
+import { useAuth } from "../lib/auth.jsx";
+import { AppLogo } from "../components/shell";
 
 function PublicNav() {
   return (
     <header className="safe-top sticky top-0 z-40 border-b border-line bg-surface/95 backdrop-blur">
       <div className="app-max flex h-14 items-center px-4">
-        <Link to="/" className="flex items-center gap-2">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-ink text-sm font-black text-gold">
-            C
-          </span>
-          <span className="text-[15px] font-extrabold text-ink">Cegnal</span>
+        <Link to="/" className="flex items-center">
+          <AppLogo height={40} />
         </Link>
         <nav className="no-scrollbar ml-auto flex items-center gap-1 overflow-x-auto text-sm font-semibold text-muted">
           <Link className="px-2.5 py-2" to="/how-it-works">
@@ -67,6 +67,8 @@ function PublicShell({ children }) {
 }
 
 export function Landing() {
+  const { plans, loading: plansLoading } = usePlans();
+  const { faqs, loading: faqsLoading } = useFaqs();
   return (
     <PublicShell>
       <HeroSlider />
@@ -177,7 +179,10 @@ export function Landing() {
       <section className="mb-8">
         <h2 className="mb-3 text-[15px] font-bold text-body">Access plans</h2>
         <div className="grid gap-3">
-          {plans.map((p) => (
+          {plansLoading ? (
+            <SkeletonList count={2} />
+          ) : (
+            plans.map((p) => (
             <Card
               key={p.id}
               className={`p-4 ${p.featured ? "ring-1 ring-gold" : ""}`}
@@ -201,7 +206,8 @@ export function Landing() {
                 </Button>
               </Link>
             </Card>
-          ))}
+            ))
+          )}
         </div>
       </section>
 
@@ -210,9 +216,13 @@ export function Landing() {
           Common questions
         </h2>
         <div className="space-y-2">
-          {faqs.slice(0, 3).map((f) => (
-            <FaqItem key={f.q} {...f} />
-          ))}
+          {faqsLoading ? (
+            <SkeletonList count={3} />
+          ) : (
+            faqs.slice(0, 3).map((f) => (
+              <FaqItem key={f.q} {...f} />
+            ))
+          )}
         </div>
         <Link
           to="/faq"
@@ -304,14 +314,45 @@ export function HowItWorks() {
 }
 
 export function Plans() {
+  const { plans, loading } = usePlans();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [payingId, setPayingId] = useState("");
+  const [payError, setPayError] = useState("");
+
+  const upgrade = async (plan) => {
+    if (!user) {
+      navigate("/register");
+      return;
+    }
+    setPayError("");
+    setPayingId(plan.id);
+    try {
+      await payWithPaystack({ planId: plan.id });
+      navigate("/app/subscription");
+    } catch (err) {
+      if (err.status !== 499) setPayError(err.message);
+    } finally {
+      setPayingId("");
+    }
+  };
+
   return (
     <PublicShell>
       <h1 className="mb-1 text-2xl font-extrabold text-ink">Plans & pricing</h1>
       <p className="mb-6 text-[15px] text-muted">
         Start free. Upgrade any time — pricing shown is a pre-launch hypothesis.
       </p>
+      {payError && (
+        <p className="mb-4 rounded-xl bg-danger-soft px-4 py-3 text-center text-[13px] font-semibold text-danger">
+          {payError}
+        </p>
+      )}
       <div className="space-y-4">
-        {plans.map((p) => (
+        {loading ? (
+          <SkeletonList count={2} />
+        ) : (
+          plans.map((p) => (
           <Card
             key={p.id}
             className={`p-5 ${p.featured ? "ring-1 ring-gold" : ""}`}
@@ -335,16 +376,17 @@ export function Plans() {
                 </li>
               ))}
             </ul>
-            <Link to="/register">
-              <Button
-                variant={p.featured ? "gold" : "secondary"}
-                className="w-full"
-              >
-                {p.cta}
-              </Button>
-            </Link>
+            <Button
+              variant={p.featured ? "gold" : "secondary"}
+              className="w-full"
+              loading={payingId === p.id}
+              onClick={() => upgrade(p)}
+            >
+              {p.cta}
+            </Button>
           </Card>
-        ))}
+          ))
+        )}
       </div>
       <Card className="mt-4 p-4 text-sm text-muted">
         <strong className="text-body">Renewal & cancellation:</strong> Premium
@@ -358,6 +400,7 @@ export function Plans() {
 }
 
 export function Faq() {
+  const { faqs, loading } = useFaqs();
   return (
     <PublicShell>
       <h1 className="mb-1 text-2xl font-extrabold text-ink">About & FAQ</h1>
@@ -365,9 +408,13 @@ export function Faq() {
         Answers to common questions about Cegnal.
       </p>
       <div className="space-y-2">
-        {faqs.map((f) => (
-          <FaqItem key={f.q} {...f} />
-        ))}
+        {loading ? (
+          <SkeletonList count={4} />
+        ) : (
+          faqs.map((f) => (
+            <FaqItem key={f.q} {...f} />
+          ))
+        )}
       </div>
       <Card className="mt-6 p-4">
         <h2 className="mb-1 text-sm font-bold">Contact support</h2>
@@ -390,48 +437,24 @@ export function Faq() {
   );
 }
 
-const legalContent = {
-  terms: {
-    title: "Terms of Service",
-    body: [
-      "1. Acceptance — By using Cegnal you agree to these terms.",
-      "2. Accounts — You are responsible for your credentials and activity.",
-      "3. Signals — Content is provided for informational purposes only and may change or be withdrawn.",
-      "4. Subscriptions — Paid plans renew monthly until cancelled; fees are shown before checkout.",
-      "5. Conduct — Do not redistribute signal content or attempt to access restricted areas.",
-    ],
-  },
-  privacy: {
-    title: "Privacy Policy",
-    body: [
-      "Data we collect — Account details (email, name), preferences and billing records.",
-      "How we use it — To provide signal access, process payments and send notifications you opt into.",
-      "Storage & security — Data is stored securely and retained only while your account is active.",
-      "Your rights — You may request export or deletion of your data from Profile → Privacy.",
-    ],
-  },
-  risk: {
-    title: "Risk Disclosure",
-    body: [
-      "Cegnal publishes analytical trade signals for informational purposes.",
-      "Trading forex, commodities and crypto carries a high level of risk and can result in the loss of your entire deposit.",
-      "Signals do not constitute financial advice and do not guarantee profit or eliminate trading risk.",
-      "Sample or historical outcomes shown in the product are illustrative and do not predict future results.",
-      "Seek independent advice and never trade money you cannot afford to lose.",
-    ],
-  },
+const fallbackLegal = {
+  terms: { title: "Terms of Service" },
+  privacy: { title: "Privacy Policy" },
+  risk: { title: "Risk Disclosure" },
 };
 
 export function Legal({ kind }) {
-  const c = legalContent[kind];
+  const { legal } = useLegal();
+  const all = Object.keys(legal).length ? legal : fallbackLegal;
+  const c = all[kind] || { title: "", body: [] };
   return (
     <PublicShell>
       <h1 className="mb-4 text-2xl font-extrabold text-ink">{c.title}</h1>
       <nav className="mb-6 flex flex-wrap gap-2">
-        {Object.values(legalContent).map((l) => (
+        {Object.values(all).map((l) => (
           <Link
             key={l.title}
-            to={`/legal/${Object.keys(legalContent).find((k) => legalContent[k] === l)}`}
+            to={`/legal/${Object.keys(all).find((k) => all[k] === l)}`}
           >
             <span
               className={`rounded-full px-3 py-1.5 text-xs font-semibold ${l.title === c.title ? "bg-ink text-surface" : "border border-line bg-surface text-muted"}`}
@@ -442,11 +465,10 @@ export function Legal({ kind }) {
         ))}
       </nav>
       <article className="space-y-4 text-[15px] leading-relaxed text-body">
-        {c.body.map((p, i) => (
+        {(c.body || []).map((p, i) => (
           <p key={i}>{p}</p>
         ))}
       </article>
-      <p className="mt-8 text-xs text-muted">Last updated: 13 October 2026</p>
     </PublicShell>
   );
 }

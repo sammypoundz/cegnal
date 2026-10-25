@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { STATUS } from "../lib/data";
 import {
   WarningIcon,
   LockIcon,
   ArrowUpIcon,
   ArrowDownIcon,
+  EyeIcon,
+  EyeOffIcon,
 } from "./icons";
 
 /* ---------- Buttons ---------- */
@@ -77,6 +79,30 @@ export function Input(props) {
       className={`${inputCls} ${props.error ? "border-danger" : ""}`}
       {...props}
     />
+  );
+}
+
+/* Password field with a show/hide toggle button. */
+export function PasswordInput({ className = "", error, ...props }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        type={show ? "text" : "password"}
+        className={`${inputCls} pr-11 ${error ? "border-danger" : ""} ${className}`}
+        {...props}
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={() => setShow((s) => !s)}
+        aria-label={show ? "Hide password" : "Show password"}
+        aria-pressed={show}
+        className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted hover:bg-canvas"
+      >
+        {show ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+      </button>
+    </div>
   );
 }
 
@@ -218,13 +244,71 @@ export function ErrorState({
   );
 }
 
-export function SkeletonCard() {
+export function SkeletonCard({ lines = 3 }) {
+  const widths = ["w-1/3", "w-2/3", "w-1/2", "w-3/4", "w-5/6"];
   return (
     <Card className="p-4">
       <div className="skeleton mb-3 h-4 w-1/3 rounded" />
-      <div className="skeleton mb-2 h-3 w-2/3 rounded" />
-      <div className="skeleton h-3 w-1/2 rounded" />
+      {Array.from({ length: Math.max(lines - 1, 1) }).map((_, i) => (
+        <div
+          key={i}
+          className={`skeleton mb-2 h-3 ${widths[(i + 1) % widths.length]} rounded`}
+        />
+      ))}
     </Card>
+  );
+}
+
+/* N stacked skeleton cards, for list placeholders. */
+export function SkeletonList({ count = 3, className = "space-y-3" }) {
+  return (
+    <div className={className} aria-hidden="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <SkeletonCard key={i} />
+      ))}
+    </div>
+  );
+}
+
+/* Stat-tile placeholder (2-column grid like the dashboards). */
+export function SkeletonStats({ count = 4 }) {
+  return (
+    <div className="mb-6 grid grid-cols-2 gap-3" aria-hidden="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <Card key={i} className="p-4">
+          <div className="skeleton mb-2 h-3 w-2/3 rounded" />
+          <div className="skeleton h-6 w-1/3 rounded" />
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+/* Profile-row placeholder (avatar + text rows, e.g. saved lists, members). */
+export function SkeletonRows({ count = 3 }) {
+  return (
+    <div className="space-y-2" aria-hidden="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <Card key={i} className="flex items-center gap-3 p-4">
+          <div className="skeleton h-10 w-10 shrink-0 rounded-full" />
+          <div className="flex-1">
+            <div className="skeleton mb-2 h-3.5 w-1/3 rounded" />
+            <div className="skeleton h-3 w-1/2 rounded" />
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+/* Page-level placeholder: heading + stat tiles + list rows. */
+export function SkeletonPage() {
+  return (
+    <div aria-hidden="true" aria-busy="true">
+      <div className="skeleton mb-4 h-5 w-1/2 rounded" />
+      <SkeletonStats />
+      <SkeletonList count={3} />
+    </div>
   );
 }
 
@@ -233,7 +317,7 @@ export function Toast({ message }) {
   return (
     <div
       role="status"
-      className="fixed inset-x-0 bottom-24 z-50 flex justify-center px-4"
+      className="app-fixed fixed inset-x-0 bottom-24 z-50 flex justify-center px-4"
     >
       <div className="rounded-xl bg-ink px-4 py-2.5 text-sm font-medium text-surface shadow-lg">
         {message}

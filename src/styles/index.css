@@ -85,14 +85,37 @@ span {
 .app-page {
   min-height: 100dvh;
 }
+
+/* Desktop: render the whole app as a centered phone-sized shell.
+   The viewport becomes the backdrop; the app column gets its own
+   canvas, borders and shadow so it reads like a mobile app frame. */
 @media (min-width: 768px) {
-  .app-max {
-    max-width: 768px;
+  body {
+    background: var(--color-canvas);
   }
-}
-@media (min-width: 1280px) {
+  html.dark body {
+    background: #06090d;
+  }
   .app-max {
-    max-width: 1104px;
+    max-width: 480px;
+    min-height: 100dvh;
+    background: var(--color-canvas);
+    box-shadow:
+      0 0 0 1px var(--color-line),
+      0 24px 60px rgba(16, 24, 32, 0.18);
+  }
+  html.dark .app-max {
+    box-shadow:
+      0 0 0 1px #26303b,
+      0 24px 60px rgba(0, 0, 0, 0.55);
+  }
+  /* Fixed overlays (bottom nav, docks, toasts) stay inside the 480px column. */
+  .app-fixed {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px;
   }
 }
 

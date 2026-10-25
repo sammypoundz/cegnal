@@ -1,29 +1,30 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Card,
   Button,
   Field,
   Input,
+  PasswordInput,
   inputCls,
-  Spinner,
 } from "../components/ui";
-import { BrandMark } from "../components/shell";
-import { MailIcon, CheckCircleIcon, ArrowLeftIcon } from "../components/icons";
+import { AppLogo } from "../components/shell";
+import { CheckCircleIcon, ArrowLeftIcon } from "../components/icons";
+import { useAuth } from "../lib/auth.jsx";
+import { api } from "../lib/api.js";
 
 function AuthShell({ title, subtitle, children }) {
   return (
     <div className="app-max app-page px-4 pb-10 pt-10">
       <Link
         to="/"
-        className="mb-8 flex items-center gap-2"
+        className="mb-8 flex items-center justify-center"
         aria-label="Cegnal home"
       >
-        <BrandMark />
-        <span className="text-[15px] font-extrabold text-ink">Cegnal</span>
+        <AppLogo height={92} />
       </Link>
-      <h1 className="mb-1 text-2xl font-extrabold text-ink">{title}</h1>
-      <p className="mb-6 text-[15px] text-muted">{subtitle}</p>
+      <h1 className="mb-1 text-center text-2xl font-extrabold text-ink">{title}</h1>
+      <p className="mb-6 text-center text-[15px] text-muted">{subtitle}</p>
       {children}
     </div>
   );
@@ -31,9 +32,11 @@ function AuthShell({ title, subtitle, children }) {
 
 export function Login() {
   const nav = useNavigate();
+  const { login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  const submit = (e) => {
+  const [formError, setFormError] = useState("");
+  const submit = async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
     const errs = {};
@@ -42,12 +45,17 @@ export function Login() {
     if (f.get("password").length < 6)
       errs.password = "Password must be at least 6 characters.";
     setErrors(errs);
+    setFormError("");
     if (Object.keys(errs).length) return;
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await login(f.get("email"), f.get("password"));
       nav("/app");
-    }, 700);
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
   return (
     <AuthShell
@@ -66,9 +74,8 @@ export function Login() {
           />
         </Field>
         <Field label="Password" error={errors.password}>
-          <Input
+          <PasswordInput
             name="password"
-            type="password"
             autoComplete="current-password"
             placeholder="••••"
             error={errors.password}
@@ -90,6 +97,11 @@ export function Login() {
         >
           Log in
         </Button>
+        {formError && (
+          <p className="text-center text-sm font-medium text-danger">
+            {formError}
+          </p>
+        )}
       </form>
       <p className="mt-6 text-center text-sm text-muted">
         New to Cegnal?{" "}
@@ -103,9 +115,11 @@ export function Login() {
 
 export function Register() {
   const nav = useNavigate();
+  const { signup } = useAuth();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  const submit = (e) => {
+  const [formError, setFormError] = useState("");
+  const submit = async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
     const errs = {};
@@ -118,12 +132,17 @@ export function Register() {
       errs.confirm = "Passwords do not match.";
     if (!f.get("terms")) errs.terms = "Please accept the terms to continue.";
     setErrors(errs);
+    setFormError("");
     if (Object.keys(errs).length) return;
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await signup(f.get("name"), f.get("email"), f.get("password"));
       nav("/verify-email");
-    }, 800);
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
   return (
     <AuthShell
@@ -154,18 +173,16 @@ export function Register() {
           hint="At least 8 characters."
           error={errors.password}
         >
-          <Input
+          <PasswordInput
             name="password"
-            type="password"
             autoComplete="new-password"
             placeholder="••••••••"
             error={errors.password}
           />
         </Field>
         <Field label="Confirm password" error={errors.confirm}>
-          <Input
+          <PasswordInput
             name="confirm"
-            type="password"
             autoComplete="new-password"
             placeholder="••••••••"
             error={errors.confirm}
@@ -200,6 +217,11 @@ export function Register() {
         >
           Create account
         </Button>
+        {formError && (
+          <p className="text-center text-sm font-medium text-danger">
+            {formError}
+          </p>
+        )}
       </form>
       <p className="mt-6 text-center text-sm text-muted">
         Already registered?{" "}
@@ -212,79 +234,211 @@ export function Register() {
 }
 
 export function ForgotPassword() {
-  const [sent, setSent] = useState(false);
-  const submit = (e) => {
-    e.preventDefault();
-    setSent(true);
+  // Full in-app flow: enter email → OTP is sent → enter code + new password.
+  const nav = useNavigate();
+  const [stage, setStage] = useState("email"); // email | code | done
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState(["", "", "", "", "", ""]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [sent, setSent] = useState("");
+  const [cooldown, setCooldown] = useState(0);
+  const codeStr = code.join("");
+
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const t = setTimeout(() => setCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const requestCode = async (targetEmail) => {
+    setError("");
+    setSent("");
+    setLoading(true);
+    try {
+      const r = await api("/auth/forgot-password", {
+        method: "POST",
+        body: { email: targetEmail },
+      });
+      setStage("code");
+      setSent(
+        r.sent
+          ? "A 6-digit reset code is on its way to your inbox."
+          : "Code generated — check the server log.",
+      );
+      if (r.devCode) setCode(String(r.devCode).slice(0, 6).split(""));
+      setCooldown(30);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const submitEmail = async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const value = String(f.get("email") || "").trim();
+    if (!/^\S+@\S+\.\S+$/.test(value)) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    setEmail(value);
+    await requestCode(value);
+  };
+
+  const submitReset = async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    setError("");
+    if (codeStr.length < 6) {
+      setError("Enter all 6 digits.");
+      return;
+    }
+    if (String(f.get("password")).length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    if (f.get("password") !== f.get("confirm")) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await api("/auth/reset-password", {
+        method: "POST",
+        body: { email, code: codeStr, password: f.get("password") },
+      });
+      setStage("done");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <AuthShell
-      title="Forgot password"
-      subtitle="We'll email you a secure link to reset your password."
+      title={
+        stage === "email"
+          ? "Forgot password"
+          : stage === "done"
+            ? "Password updated"
+            : "Check your email"
+      }
+      subtitle={
+        stage === "email"
+          ? "We'll send a 6-digit code to your email to reset your password."
+          : stage === "done"
+            ? "You can now log in with your new password."
+            : `Enter the code we sent to ${email} and choose a new password.`
+      }
     >
-      {sent ? (
-        <Card className="p-5 text-center">
-          <div className="mb-2 flex justify-center text-gold">
-            <MailIcon size={32} />
-          </div>
-          <h2 className="mb-1 font-bold">Check your email</h2>
-          <p className="mb-4 text-sm text-muted">
-            If an account exists for that address, a reset link is on its way.
-            The link expires in 30 minutes.
-          </p>
-          <Link to="/reset-password">
-            <Button variant="secondary" className="w-full">
-              Open reset page (prototype)
-            </Button>
-          </Link>
-        </Card>
-      ) : (
-        <form onSubmit={submit} className="space-y-4">
+      {stage === "email" && (
+        <form onSubmit={submitEmail} className="space-y-4">
           <Field label="Email">
             <Input
+              name="email"
               type="email"
               inputMode="email"
+              autoComplete="email"
               placeholder="you@example.com"
               required
             />
           </Field>
-          <Button type="submit" variant="gold" className="w-full">
-            Send reset link
+          <Button
+            type="submit"
+            variant="gold"
+            className="w-full"
+            loading={loading}
+          >
+            Send reset code
           </Button>
+          {error && (
+            <p className="text-center text-sm font-medium text-danger">{error}</p>
+          )}
         </form>
       )}
-      <p className="mt-6 text-center text-sm text-muted">
-        <Link
-          to="/login"
-          className="flex items-center gap-1 font-semibold text-gold"
-        >
-          <ArrowLeftIcon size={14} /> Back to log in
-        </Link>
-      </p>
-    </AuthShell>
-  );
-}
 
-export function ResetPassword() {
-  const nav = useNavigate();
-  const [done, setDone] = useState(false);
-  const submit = (e) => {
-    e.preventDefault();
-    setDone(true);
-  };
-  return (
-    <AuthShell
-      title="Reset password"
-      subtitle="Choose a new password for your account."
-    >
-      {done ? (
+      {stage === "code" && (
+        <form onSubmit={submitReset} className="space-y-5">
+          {sent && (
+            <p className="text-center text-sm text-success">{sent}</p>
+          )}
+          <div>
+            <span className="mb-1.5 block text-sm font-medium">
+              Verification code
+            </span>
+            <div className="flex gap-2">
+              {code.map((digit, i) => (
+                <input
+                  key={i}
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  aria-label={`Digit ${i + 1}`}
+                  className={`${inputCls} h-14 w-12 px-0 text-center text-xl font-bold`}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g, "").slice(-1);
+                    const next = [...code];
+                    next[i] = v;
+                    setCode(next);
+                    if (v) e.target.nextSibling?.focus();
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+          <Field label="New password" hint="At least 8 characters.">
+            <PasswordInput
+              name="password"
+              autoComplete="new-password"
+              placeholder="••••••••"
+            />
+          </Field>
+          <Field label="Confirm new password">
+            <PasswordInput
+              name="confirm"
+              autoComplete="new-password"
+              placeholder="••••••••"
+            />
+          </Field>
+          <Button
+            type="submit"
+            variant="gold"
+            className="w-full"
+            loading={loading}
+          >
+            Reset password
+          </Button>
+          {error && (
+            <p className="text-center text-sm font-medium text-danger">{error}</p>
+          )}
+          <p className="text-center text-sm text-muted">
+            Didn't get it?{" "}
+            {cooldown > 0 ? (
+              <span>Resend in {cooldown}s</span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => requestCode(email)}
+                className="font-semibold text-gold"
+              >
+                Resend code
+              </button>
+            )}
+          </p>
+        </form>
+      )}
+
+      {stage === "done" && (
         <Card className="p-5 text-center">
           <div className="mb-2 flex justify-center text-success">
             <CheckCircleIcon size={32} />
           </div>
-          <h2 className="mb-1 font-bold">Password updated</h2>
+          <h2 className="mb-1 font-bold">All set</h2>
           <p className="mb-4 text-sm text-muted">
-            You can now log in with your new password.
+            Your password has been changed. Log in with the new one.
           </p>
           <Button
             variant="gold"
@@ -294,18 +448,17 @@ export function ResetPassword() {
             Go to log in
           </Button>
         </Card>
-      ) : (
-        <form onSubmit={submit} className="space-y-4">
-          <Field label="New password" hint="At least 8 characters.">
-            <Input type="password" required minLength={8} />
-          </Field>
-          <Field label="Confirm new password">
-            <Input type="password" required />
-          </Field>
-          <Button type="submit" variant="gold" className="w-full">
-            Update password
-          </Button>
-        </form>
+      )}
+
+      {stage !== "done" && (
+        <p className="mt-6 text-center text-sm text-muted">
+          <Link
+            to="/login"
+            className="flex items-center gap-1 font-semibold text-gold"
+          >
+            <ArrowLeftIcon size={14} /> Back to log in
+          </Link>
+        </p>
       )}
     </AuthShell>
   );
@@ -313,47 +466,120 @@ export function ResetPassword() {
 
 export function VerifyEmail() {
   const nav = useNavigate();
+  const { user, refresh } = useAuth();
+  const [code, setCode] = useState(["", "", "", "", "", ""]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [sent, setSent] = useState("");
+  const [resending, setResending] = useState(false);
+  const [cooldown, setCooldown] = useState(0); // seconds until resend is allowed
+
+  const codeStr = code.join("");
+
+  useEffect(() => {
+    if (user?.emailVerified) nav("/onboarding");
+  }, [user, nav]);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (codeStr.length < 6) {
+      setError("Enter all 6 digits.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await api("/auth/verify-otp", { method: "POST", body: { code: codeStr } });
+      await refresh();
+      nav("/onboarding");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* resend cooldown ticker */
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const t = setTimeout(() => setCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const resend = async () => {
+    if (resending || cooldown > 0) return;
+    setError("");
+    setSent("");
+    setResending(true);
+    try {
+      const r = await api("/auth/resend-otp", { method: "POST" });
+      setSent(
+        r.sent
+          ? "A new code is on its way to your inbox."
+          : "Code regenerated — check the server log.",
+      );
+      if (r.devCode) {
+        setCode(String(r.devCode).slice(0, 6).split(""));
+      }
+      setCooldown(30); // prevent spamming the email endpoint
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setResending(false);
+    }
+  };
+
   return (
     <AuthShell
       title="Verify your email"
-      subtitle="We sent a 6-digit code to your inbox. Enter it below to activate your account."
+      subtitle={`We sent a 6-digit code to ${user?.email || "your inbox"}. Enter it below to activate your account.`}
     >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          nav("/onboarding");
-        }}
-        className="space-y-5"
-      >
+      <form onSubmit={submit} className="space-y-5">
         <div>
           <span className="mb-1.5 block text-sm font-medium">
             Verification code
           </span>
           <div className="flex gap-2">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
+            {code.map((digit, i) => (
               <input
                 key={i}
                 inputMode="numeric"
                 maxLength={1}
+                value={digit}
                 aria-label={`Digit ${i + 1}`}
                 className={`${inputCls} h-14 w-12 px-0 text-center text-xl font-bold`}
-                onChange={(e) =>
-                  e.target.nextSibling &&
-                  e.target.value &&
-                  e.target.nextSibling.focus()
-                }
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, "").slice(-1);
+                  const next = [...code];
+                  next[i] = v;
+                  setCode(next);
+                  if (v) e.target.nextSibling?.focus();
+                }}
               />
             ))}
           </div>
         </div>
-        <Button type="submit" variant="gold" className="w-full">
+        <Button type="submit" variant="gold" className="w-full" loading={loading}>
           Verify & continue
         </Button>
+        {error && <p className="text-center text-sm font-medium text-danger">{error}</p>}
+        {sent && <p className="text-center text-sm text-success">{sent}</p>}
         <p className="text-center text-sm text-muted">
           Didn't get it?{" "}
-          <button type="button" className="font-semibold text-gold">
-            Resend code
-          </button>
+          {cooldown > 0 ? (
+            <span className="text-muted">
+              Resend in {cooldown}s
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={resend}
+              disabled={resending}
+              className="font-semibold text-gold disabled:opacity-50"
+            >
+              {resending ? "Sending…" : "Resend code"}
+            </button>
+          )}
         </p>
       </form>
     </AuthShell>

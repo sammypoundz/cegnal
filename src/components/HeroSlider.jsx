@@ -1,4 +1,4 @@
-﻿﻿import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowIcon, PauseIcon, PlayIcon } from "./icons";
 import heroResources from "../assets/hero-resources.svg";
@@ -135,7 +135,7 @@ export default function HeroSlider() {
                 <Link
                   to={slide.cta.to}
                   tabIndex={active ? 0 : -1}
-                  className="mt-4 inline-flex w-fit items-center gap-2 rounded-xl bg-white/95 px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-white"
+                  className="mt-4 inline-flex w-fit items-center gap-2 rounded-xl bg-white/95 px-4 py-2.5 text-sm font-bold text-[#101820] transition hover:bg-white"
                 >
                   {slide.cta.label}
                   <ArrowIcon size={16} />

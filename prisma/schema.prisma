@@ -1,0 +1,344 @@
+// Cegnal — Prisma schema for MongoDB Atlas.
+// Models mirror the sample data in src/lib/data.js and src/lib/zoneData.js.
+// Run: npm run prisma:generate && npm run db:push
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  member
+  analyst
+  admin
+}
+
+enum PlanTier {
+  free
+  premium
+}
+
+enum SubscriptionStatus {
+  active
+  cancelled
+  past_due
+}
+
+enum SignalStatus {
+  active
+  target_reached
+  stop_loss
+  closed
+  cancelled
+  expired
+  pending_review
+}
+
+enum Direction {
+  buy
+  sell
+}
+
+enum PaymentStatus {
+  paid
+  pending
+  failed
+  refunded
+}
+
+enum NotificationCategory {
+  signal_update
+  new_signal
+  billing
+  system
+}
+
+model User {
+  id            String             @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  email         String             @unique
+  passwordHash  String
+  role          Role               @default(member)
+  username      String?            @unique
+  initials      String?
+  plan          PlanTier           @default(free)
+  planStatus    SubscriptionStatus @default(active)
+  planRenewsAt  DateTime?
+  timezone      String             @default("Africa/Lagos (GMT+1)")
+  emailVerified Boolean            @default(false)
+  otpCode       String?
+  otpExpiresAt  DateTime?
+  kycVerified   Boolean            @default(false)
+  lastSeenAt    DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  signals       Signal[]       @relation("Analyst")
+  notifications Notification[]
+  payments      Payment[]
+  subscription  Subscription?
+  zoneSubscriptions ZoneSubscription[] @relation("ZoneSubscriber")
+  ownedZones    ZoneTrader[]   @relation("ZoneOwner")
+  zoneSignalTakes ZoneSignalTake[] @relation("ZoneSignalTaker")
+  zoneRatings   ZoneRating[]   @relation("ZoneRater")
+
+  @@map("users")
+}
+
+// A signal revision note ("Status remains active. Entry range unchanged.")
+model Revision {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  time      DateTime @default(now())
+  note      String
+
+  signal Signal @relation(fields: [signalId], references: [id], onDelete: Cascade)
+  signalId String
+
+  @@map("revisions")
+}
+
+model Signal {
+  id         String       @id @default(auto()) @map("_id") @db.ObjectId
+  instrument String // e.g. "EUR/USD"
+  market     String // Forex | Commodities | Crypto | Indices
+  direction  Direction
+  status     SignalStatus @default(active)
+  timeframe  String // "4H", "1H", "Daily"
+  entry      String // "1.0842 – 1.085" (kept as string, matches UI)
+  stopLoss   String
+  targets    String[]
+  tier       PlanTier     @default(free)
+  rationale  String
+  published  DateTime     @default(now())
+  updated    DateTime     @updatedAt
+  publishedAt DateTime    @default(now())
+
+  analyst   User   @relation("Analyst", fields: [analystId], references: [id])
+  analystId String
+  analystName String // denormalised display name, e.g. "Cegnal Desk"
+
+  revisions Revision[]
+
+  @@index([status])
+  @@index([tier])
+  @@map("signals")
+}
+
+model Notification {
+  id        String                @id @default(auto()) @map("_id") @db.ObjectId
+  read      Boolean               @default(false)
+  category  NotificationCategory  @default(system)
+  title     String
+  body      String
+  link      String?
+  createdAt DateTime              @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+model Plan {
+  id       String   @id @map("_id") // "free" | "premium"
+  name     String
+  price    String // "₦5,000" — display string, matches UI
+  interval String // "per month" | "forever"
+  blurb    String
+  features String[]
+  cta      String
+  featured Boolean  @default(false)
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id        String             @id @default(auto()) @map("_id") @db.ObjectId
+  status    SubscriptionStatus @default(active)
+  startedAt DateTime           @default(now())
+  renewsAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
+
+  plan   Plan   @relation(fields: [planId], references: [id])
+  planId String
+
+  payments Payment[]
+
+  @@map("subscriptions")
+}
+
+model Payment {
+  id     String        @id @default(auto()) @map("_id") @db.ObjectId
+  ref    String        @unique // "CGN-PAY-8421"
+  date   DateTime      @default(now())
+  amount String // "₦5,000" — display string, matches UI
+  planName String // "Premium — Monthly"
+  status PaymentStatus @default(paid)
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  subscriptionId String?
+
+  @@index([userId])
+  @@map("payments")
+}
+
+// Forex Signal Zone — trader profiles from src/lib/zoneData.js
+model ZoneTrader {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  handle      String  @unique // "katforex"
+  displayName String // "Kat Forex"
+  fee         String // "₦5,000" / "$50" / "Free"
+  entryFee    String  @default("Free")
+  rating      Float   @default(0)
+  reviewCount Int     @default(0)
+  subscribers String  @default("0") // stored as display string "300k"
+  winRate     String  @default("0%")
+  lossRate    String  @default("0%")
+  status      String  @default("Active")
+  marketType  String  @default("Forex")
+  bio         String  @default("")
+  catalogs    String[] // ["chart", "terminal", "analysis", "course"]
+  sponsored   Boolean  @default(false) // promoted placement in the directory
+  sponsoredUntil DateTime?
+
+  zoneSubscriptions ZoneSubscription[]
+  zoneSignals       ZoneSignal[]
+  zoneRatings       ZoneRating[]
+  zoneEarnings      ZoneEarning[]
+  owner             User?   @relation("ZoneOwner", fields: [ownerId], references: [id])
+  ownerId           String?
+  @@index([ownerId])
+  @@map("zone_traders")
+}
+
+// Admin review queue + audit trail (src/lib/data.js)
+model ReviewQueueItem {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  instrument String
+  direction  Direction
+  analystName String
+  submitted  DateTime @default(now())
+  status     String   @default("Pending review")
+
+  @@map("review_queue")
+}
+
+model AuditLog {
+  id     String   @id @default(auto()) @map("_id") @db.ObjectId
+  actor  String
+  action String
+  record String
+  time   DateTime @default(now())
+
+  @@map("audit_log")
+}
+
+// Key/value site content (FAQs, legal pages, risk notice) seeded from the server.
+model SiteContent {
+  id     String   @id @map("_id") // "faq:<slug>" | "legal:terms" | "risk-notice"
+  kind   String // faq | legal | risk
+  title  String
+  body   String[]
+  order  Int      @default(0)
+
+  @@map("site_content")
+}
+
+// Forex Signal Zone — per-trader zone subscriptions + zone signals
+model ZoneSubscription {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  createdAt DateTime @default(now())
+  renewsAt  DateTime?
+  status    String   @default("active") // active | cancelled | past_due
+
+  user   User       @relation("ZoneSubscriber", fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  trader   ZoneTrader @relation(fields: [traderId], references: [id], onDelete: Cascade)
+  traderId String
+
+  @@unique([userId, traderId])
+  @@index([userId])
+  @@index([traderId])
+  @@map("zone_subscriptions")
+}
+
+model ZoneSignal {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  pair      String // "XAU/USD"
+  direction String // "buy" | "sell"
+  status    String   @default("live") // live | target_hit | stopped_out | breakeven | draft
+  entry     String
+  stopLoss  String
+  targets   String
+  rr        String   @default("—")
+  timeframe String   @default("4H")
+  note      String   @default("")
+  result    String? // "+186 pips"
+  postedAt  DateTime @default(now())
+
+  trader   ZoneTrader @relation(fields: [traderId], references: [id], onDelete: Cascade)
+  traderId String
+
+  takes ZoneSignalTake[]
+
+  @@index([traderId, postedAt])
+  @@map("zone_signals")
+}
+
+// A member marking a zone signal as "I took this trade"
+model ZoneSignalTake {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  takenAt  DateTime @default(now())
+
+  user     User       @relation("ZoneSignalTaker", fields: [userId], references: [id], onDelete: Cascade)
+  userId   String
+  signal   ZoneSignal @relation(fields: [signalId], references: [id], onDelete: Cascade)
+  signalId String
+  @@unique([userId, signalId])
+  @@index([signalId])
+  @@map("zone_signal_takes")
+}
+
+// A member's 1–5 star rating of a trader's zone (one per user per zone).
+model ZoneRating {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  stars     Int // 1..5
+  comment   String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user     User       @relation("ZoneRater", fields: [userId], references: [id], onDelete: Cascade)
+  userId   String
+  trader   ZoneTrader @relation(fields: [traderId], references: [id], onDelete: Cascade)
+  traderId String
+  @@unique([userId, traderId])
+  @@index([traderId])
+  @@map("zone_ratings")
+}
+
+// Zone owner earnings: a ledger entry per subscription payment received.
+model ZoneEarning {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  amount    Float // in major units (e.g. 5000 = ₦5,000)
+  currency  String   @default("NGN")
+  feeAmount Float    @default(0) // platform commission
+  status    String   @default("available") // available | pending | paid_out
+  createdAt DateTime @default(now())
+
+  trader   ZoneTrader @relation(fields: [traderId], references: [id], onDelete: Cascade)
+  traderId String
+  @@index([traderId, createdAt])
+  @@map("zone_earnings")
+}

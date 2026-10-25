@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+﻿import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTheme } from "../lib/theme";
+import { AppLogo } from "./shell";
 
 /* Native-app style onboarding slides for the index page */
 
@@ -31,6 +33,8 @@ const SLIDES = [
 ];
 
 export default function Onboarding() {
+  const theme = useTheme();
+  const dark = theme === "dark";
   const [index, setIndex] = useState(0);
   const [dx, setDx] = useState(0); // live drag offset for slide-follow effect
   const [dragging, setDragging] = useState(false);
@@ -72,7 +76,9 @@ export default function Onboarding() {
 
   return (
     <div
-      className="fixed inset-0 flex flex-col overflow-hidden bg-ink text-white"
+      className={`fixed inset-0 flex flex-col overflow-hidden transition-colors duration-300 ${
+        dark ? "bg-[#0c1116] text-white" : "bg-[#f4f1e8] text-ink"
+      }`}
       role="region"
       aria-roledescription="carousel"
       aria-label="Cegnal introduction"
@@ -83,21 +89,24 @@ export default function Onboarding() {
       {/* gold accent line — subtle, not glowing */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-[max(4rem,calc(env(safe-area-inset-top)+4rem))] h-px bg-gold/30"
+        className={`pointer-events-none absolute inset-x-0 top-[max(4rem,calc(env(safe-area-inset-top)+4rem))] h-px ${
+          dark ? "bg-gold/30" : "bg-gold/50"
+        }`}
       />
 
       {/* top bar: brand + skip */}
       <div className="relative z-10 flex items-center justify-between px-5 pt-[max(1rem,env(safe-area-inset-top))]">
-        <span className="flex items-center gap-2">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gold text-sm font-black text-ink">
-            C
-          </span>
-          <span className="text-[15px] font-extrabold">Cegnal</span>
+        <span className="flex items-center">
+          <AppLogo height={40} />
         </span>
         {!last && (
           <Link
             to="/register"
-            className="rounded-full px-3 py-1.5 text-[13px] font-semibold text-white/60 transition-colors hover:text-white"
+            className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+              dark
+                ? "text-white/60 hover:text-white"
+                : "text-ink/60 hover:text-ink"
+            }`}
           >
             Skip
           </Link>
@@ -129,7 +138,13 @@ export default function Onboarding() {
               }}
             >
               {/* illustration — flat, solid app-icon style tile */}
-              <div className="mx-auto mb-10 flex h-24 w-24 items-center justify-center rounded-[22px] bg-[#1a222e] ring-1 ring-white/10">
+              <div
+                className={`mx-auto mb-10 flex h-24 w-24 items-center justify-center rounded-[22px] ring-1 ${
+                  dark
+                    ? "bg-[#1a222e] ring-white/10"
+                    : "bg-white ring-ink/10 shadow-sm"
+                }`}
+              >
                 <span
                   className="text-[44px] leading-none"
                   style={{
@@ -146,7 +161,11 @@ export default function Onboarding() {
               <h1 className="text-center text-[26px] font-extrabold leading-tight tracking-tight">
                 {s.title}
               </h1>
-              <p className="mx-auto mt-3 max-w-[320px] text-center text-[15px] leading-relaxed text-white/65">
+              <p
+                className={`mx-auto mt-3 max-w-[320px] text-center text-[15px] leading-relaxed ${
+                  dark ? "text-white/65" : "text-ink/65"
+                }`}
+              >
                 {s.body}
               </p>
             </div>
@@ -166,7 +185,11 @@ export default function Onboarding() {
               aria-label={`Go to slide ${i + 1}`}
               aria-current={i === index ? "true" : undefined}
               className={`h-2 rounded-full transition-all duration-300 ${
-                i === index ? "w-7 bg-gold" : "w-2 bg-white/25 hover:bg-white/40"
+                i === index
+                  ? "w-7 bg-gold"
+                  : dark
+                    ? "w-2 bg-white/25 hover:bg-white/40"
+                    : "w-2 bg-ink/20 hover:bg-ink/35"
               }`}
             />
           ))}
@@ -177,7 +200,7 @@ export default function Onboarding() {
             <Link to="/register" className="block">
               <button
                 type="button"
-                className="w-full rounded-2xl bg-gold py-4 text-[15px] font-bold text-ink transition-transform active:scale-[0.98]"
+                className="w-full rounded-2xl bg-gold py-4 text-[15px] font-bold text-[#101820] transition-transform active:scale-[0.98]"
               >
                 Create free account
               </button>
@@ -185,7 +208,11 @@ export default function Onboarding() {
             <Link to="/login" className="block">
               <button
                 type="button"
-                className="w-full rounded-2xl border border-white/15 bg-white/5 py-4 text-[15px] font-bold text-white transition-transform active:scale-[0.98]"
+                className={`w-full rounded-2xl border py-4 text-[15px] font-bold transition-transform active:scale-[0.98] ${
+                  dark
+                    ? "border-white/15 bg-white/5 text-white"
+                    : "border-ink/15 bg-white/60 text-ink"
+                }`}
               >
                 I already have an account
               </button>
@@ -196,7 +223,11 @@ export default function Onboarding() {
             <Link to="/register" className="flex-1">
               <button
                 type="button"
-                className="w-full rounded-2xl border border-white/15 bg-white/5 py-4 text-[15px] font-bold text-white transition-transform active:scale-[0.98]"
+                className={`w-full rounded-2xl border py-4 text-[15px] font-bold transition-transform active:scale-[0.98] ${
+                  dark
+                    ? "border-white/15 bg-white/5 text-white"
+                    : "border-ink/15 bg-white/60 text-ink"
+                }`}
               >
                 Get started
               </button>
@@ -204,14 +235,18 @@ export default function Onboarding() {
             <button
               type="button"
               onClick={next}
-              className="flex-1 rounded-2xl bg-gold py-4 text-[15px] font-bold text-ink transition-transform active:scale-[0.98]"
+              className="flex-1 rounded-2xl bg-gold py-4 text-[15px] font-bold text-[#101820] transition-transform active:scale-[0.98]"
             >
               Next
             </button>
           </div>
         )}
 
-        <p className="mt-3 text-center text-[11px] text-white/40">
+        <p
+          className={`mt-3 text-center text-[11px] ${
+            dark ? "text-white/40" : "text-ink/45"
+          }`}
+        >
           Swipe to explore · Trading involves risk
         </p>
       </div>
