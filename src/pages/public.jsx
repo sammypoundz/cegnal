@@ -18,7 +18,7 @@ import { AppLogo } from "../components/shell";
 function PublicNav() {
   return (
     <header className="safe-top sticky top-0 z-40 border-b border-line bg-surface/95 backdrop-blur">
-      <div className="app-max flex h-14 items-center px-4">
+      <div className="flex h-14 items-center px-4">
         <Link to="/" className="flex items-center">
           <AppLogo height={40} />
         </Link>
@@ -45,23 +45,25 @@ function PublicNav() {
 
 function PublicShell({ children }) {
   return (
-    <div className="app-max app-page">
-      <PublicNav />
-      <main className="px-4 pb-16 pt-6">{children}</main>
-      <footer className="border-t border-line px-4 py-6 text-xs text-muted">
-        <div className="mx-auto max-w-[480px] md:max-w-[768px] xl:max-w-[1104px]">
-          <div className="mb-3 flex flex-wrap gap-4 font-semibold">
-            <Link to="/legal/terms">Terms</Link>
-            <Link to="/legal/privacy">Privacy</Link>
-            <Link to="/legal/risk">Risk disclosure</Link>
-            <Link to="/faq">Contact support</Link>
+    <div className="z-page min-h-dvh">
+      <div className="app-max app-page">
+        <PublicNav />
+        <main className="px-4 pb-16 pt-6">{children}</main>
+        <footer className="border-t border-line px-4 py-6 text-xs text-muted">
+          <div className="mx-auto">
+            <div className="mb-3 flex flex-wrap gap-4 font-semibold">
+              <Link to="/legal/terms">Terms</Link>
+              <Link to="/legal/privacy">Privacy</Link>
+              <Link to="/legal/risk">Risk disclosure</Link>
+              <Link to="/faq">Contact support</Link>
+            </div>
+            <p>
+              © 2026 Cegnal. Trading involves risk. Signals are informational and
+              are not financial advice.
+            </p>
           </div>
-          <p>
-            © 2026 Cegnal. Trading involves risk. Signals are informational and
-            are not financial advice.
-          </p>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </div>
   );
 }

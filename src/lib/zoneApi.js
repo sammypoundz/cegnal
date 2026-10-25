@@ -246,6 +246,7 @@ export function useZoneRatings(handle) {
     rating: live ? data?.rating : null,
     reviewCount: live ? data?.reviewCount : null,
     myRating: live ? data?.myRating || null : null,
+    isOwner: Boolean(data?.isOwner),
     ratings: live ? data?.ratings || [] : [],
     loading,
     refresh: () => setNonce((n) => n + 1),
@@ -262,14 +263,26 @@ export async function rateZone(handle, stars, comment = "") {
 
 /* The zone owner's subscription earnings ledger + summary. */
 export function useZoneEarnings() {
-  const { data, live, loading } = useZoneApi("/zone/me/earnings");
+  const [nonce, setNonce] = useState(0);
+  const { data, live, loading } = useZoneApi("/zone/me/earnings", {
+    deps: [nonce],
+  });
   return {
     zone: live ? data?.zone || null : null,
     summary: live ? data?.summary || null : null,
     earnings: live ? data?.earnings || [] : [],
     live,
     loading,
+    refetch: () => setNonce((n) => n + 1),
   };
+}
+
+/* Request a withdrawal of the zone owner's available balance. */
+export async function withdrawEarnings(amount, bankName, accountNumber) {
+  return api("/zone/me/withdraw", {
+    method: "POST",
+    body: { amount, bankName, accountNumber },
+  });
 }
 
 /* Promote (sponsor) or unpromote a zone for boosted directory placement. */

@@ -597,6 +597,7 @@ router.get("/:handle/ratings", async (req, res) => {
     res.json({
       rating: trader.rating,
       reviewCount: trader.reviewCount,
+      isOwner: Boolean(trader.ownerId && trader.ownerId === req.user.sub),
       myRating: mine ? { stars: mine.stars, comment: mine.comment } : null,
       ratings: ratings.map((r) => ({
         id: r.id,
@@ -625,6 +626,11 @@ router.post("/:handle/rate", async (req, res) => {
       where: { handle: req.params.handle },
     });
     if (!trader) return res.status(404).json({ error: "Trader not found" });
+
+    // Zone owners cannot rate their own zone.
+    if (trader.ownerId && trader.ownerId === req.user.sub) {
+      return res.status(403).json({ error: "You cannot rate your own zone" });
+    }
 
     await prisma.zoneRating.upsert({
       where: { userId_traderId: { userId: req.user.sub, traderId: trader.id } },
@@ -703,6 +709,57 @@ router.get("/me/earnings", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to load earnings", detail: err.message });
+  }
+});
+
+// POST /api/zone/me/withdraw — withdraw available balance to a bank account.
+// Mock payout: available ledger entries are marked `paid_out` and a withdrawal
+// record is returned so the wallet UI can show the new balance instantly.
+router.post("/me/withdraw", async (req, res) => {
+  try {
+    const zone = await ownZone(req.user.sub);
+    if (!zone) return res.status(404).json({ error: "You do not own a zone" });
+    const amount = Number(req.body?.amount);
+    const bank = String(req.body?.bankName || "").trim();
+    const account = String(req.body?.accountNumber || "").trim();
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: "Enter a valid amount" });
+    }
+    if (!bank || !account) {
+      return res.status(400).json({ error: "Bank account details are required" });
+    }
+    const available = await prisma.zoneEarning.findMany({
+      where: { traderId: zone.id, status: "available" },
+      orderBy: { createdAt: "asc" },
+    });
+    const balance = available.reduce(
+      (sum, e) => sum + (e.amount - e.feeAmount),
+      0,
+    );
+    if (amount > balance) {
+      return res.status(400).json({
+        error: `Insufficient balance — only ${Math.round(balance * 100) / 100} available`,
+      });
+    }
+    // Mark enough of the oldest available entries as paid out to cover the amount.
+    let remaining = amount;
+    const marked = [];
+    for (const entry of available) {
+      if (remaining <= 0) break;
+      marked.push(entry.id);
+      remaining -= entry.amount - entry.feeAmount;
+    }
+    await prisma.zoneEarning.updateMany({
+      where: { id: { in: marked } },
+      data: { status: "paid_out" },
+    });
+    res.status(201).json({
+      ok: true,
+      withdrawn: amount,
+      destination: { bankName: bank, accountNumber: account.slice(-4) },
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Withdrawal failed", detail: err.message });
   }
 });
 

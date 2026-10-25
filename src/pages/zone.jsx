@@ -49,7 +49,7 @@ import {
   useZoneRatings,
   rateZone,
   useZoneEarnings,
-  promoteZone,
+  withdrawEarnings,
   toggleSignalTake,
   postZoneSignal,
   updateZone,
@@ -699,6 +699,9 @@ export function ZoneRoom() {
                   </div>
                 ))}
               </div>
+
+              {/* padding above the rating section */}
+              <div className="h-4" aria-hidden="true" />
 
               <RateZoneCard handle={traderId} traderName={trader.displayName} />
 
@@ -2183,7 +2186,7 @@ function AnalystDashboardInner({ zone }) {
           role="status"
           className="safe-bottom app-fixed fixed inset-x-0 bottom-24 z-50 flex justify-center px-6"
         >
-          <span className="rounded-full bg-z-ink px-4 py-2.5 text-[13px] font-semibold text-white shadow-lg">
+          <span className="toast-pill rounded-full bg-z-ink px-4 py-2.5 text-[13px] font-semibold text-white shadow-lg">
             {toast}
           </span>
         </div>
@@ -2192,28 +2195,13 @@ function AnalystDashboardInner({ zone }) {
   );
 }
 
-/* ---------------- Zone owner earnings + promotion ---------------- */
+/* ---------------- Zone owner wallet (earnings + withdrawal) ----------------
+   Wallet-style interface: balance card, quick stats, withdraw flow and a
+   transaction ledger. */
 
 function EarningsPanel({ zone, onFlash }) {
-  const { summary, earnings, loading, live } = useZoneEarnings();
-  const [busy, setBusy] = useState(false);
-
-  const togglePromotion = async () => {
-    if (!zone) return;
-    setBusy(true);
-    try {
-      const res = await promoteZone(zone.id, !zone.sponsored);
-      onFlash(
-        res.trader?.sponsored
-          ? "Zone promoted — sponsored for 30 days"
-          : "Promotion removed",
-      );
-    } catch (err) {
-      onFlash(err.status === 0 ? "Offline — not saved" : err.message);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { summary, earnings, loading, live, refetch } = useZoneEarnings();
+  const [sheet, setSheet] = useState(false);
 
   const fmt = (v, cur) =>
     `${cur || "NGN"} ${Number(v || 0).toLocaleString(undefined, {
@@ -2230,80 +2218,70 @@ function EarningsPanel({ zone, onFlash }) {
         </p>
         <p className="mt-1 text-[13px] text-z-mute">
           When members pay to subscribe to your zone, each payment is credited
-          to your earnings ledger.
+          to your wallet.
         </p>
       </div>
     );
   }
 
+  const available =
+    earnings
+      .filter((e) => e.status === "available")
+      .reduce((a, e) => a + e.net, 0) || summary.net;
+
   return (
     <div className="space-y-4">
-      {/* summary */}
-      <div className="grid grid-cols-2 gap-3">
-        <AnalystStat
-          label="Net earnings"
-          value={fmt(summary.net, summary.currency)}
-          hint={`${summary.payouts} payments received`}
+      {/* wallet balance card */}
+      <div className="relative overflow-hidden rounded-3xl bg-z-charcoal p-5 text-white shadow-lg">
+        <div
+          aria-hidden="true"
+          className="absolute -right-8 -top-10 h-36 w-36 rounded-full bg-z-blue/25 blur-2xl"
         />
-        <AnalystStat
-          label="Active subscribers"
-          value={summary.activeSubscribers}
-          hint="Paying members"
+        <div
+          aria-hidden="true"
+          className="absolute -bottom-14 -left-6 h-32 w-32 rounded-full bg-z-amber/20 blur-2xl"
         />
-        <AnalystStat
-          label="Gross revenue"
-          value={fmt(summary.gross, summary.currency)}
-        />
-        <AnalystStat
-          label="Platform fee"
-          value={fmt(summary.fees, summary.currency)}
-          hint="10% commission"
-        />
-      </div>
-
-      {/* promote / sponsor */}
-      <div className="z-card p-4">
-        <div className="flex items-center gap-2">
-          <StarIc size={16} filled />
-          <h2 className="text-[15px] font-bold text-z-ink">Promote your zone</h2>
-          {zone?.sponsored && (
-            <span className="ml-auto rounded-full bg-[#3a2c07] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#f2c14e]">
-              Sponsored
+        <div className="relative">
+          <div className="flex items-center justify-between">
+            <span className="text-[12px] font-semibold uppercase tracking-wide text-white/60">
+              Available balance
             </span>
-          )}
+            <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white/80">
+              Wallet
+            </span>
+          </div>
+          <div className="mt-2 text-[30px] font-extrabold leading-none tracking-tight">
+            {fmt(available, summary.currency)}
+          </div>
+          <div className="mt-1 text-[12px] text-white/60">
+            Lifetime earnings {fmt(summary.gross, summary.currency)}
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            {[
+              [fmt(summary.net, summary.currency), "Net earned"],
+              [fmt(summary.fees, summary.currency), "Platform fee"],
+              [String(summary.activeSubscribers), "Subscribers"],
+            ].map(([v, l]) => (
+              <div key={l} className="rounded-xl bg-white/10 px-2 py-2.5">
+                <div className="text-[13px] font-bold">{v}</div>
+                <div className="mt-0.5 text-[10px] text-white/60">{l}</div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => setSheet(true)}
+            disabled={available <= 0}
+            className="mt-4 min-h-[46px] w-full rounded-xl bg-white text-[14px] font-bold text-[#0b0b0b] transition-transform active:scale-[0.98] disabled:opacity-50"
+          >
+            Withdraw funds
+          </button>
         </div>
-        <p className="mt-2 text-[13px] leading-relaxed text-z-mute">
-          Sponsored zones appear at the top of the Signal Zone directory and in
-          the featured carousel, reaching more potential subscribers.
-        </p>
-        <ul className="mt-3 space-y-1.5 text-[12px] text-z-mute">
-          <li className="flex items-center gap-2">
-            <CheckIcon size={12} className="text-success" /> Top placement in the
-            zone directory
-          </li>
-          <li className="flex items-center gap-2">
-            <CheckIcon size={12} className="text-success" /> "Sponsored" badge on
-            your zone card
-          </li>
-          <li className="flex items-center gap-2">
-            <CheckIcon size={12} className="text-success" /> Runs for 30 days ·
-            ₦5,000
-          </li>
-        </ul>
-        <ZoneButton
-          className="mt-3 w-full min-h-[44px]"
-          variant={zone?.sponsored ? "outline" : "blue"}
-          loading={busy}
-          onClick={togglePromotion}
-        >
-          {zone?.sponsored ? "Remove sponsorship" : "Promote zone · ₦5,000"}
-        </ZoneButton>
       </div>
 
-      {/* ledger */}
+      {/* transaction ledger */}
       <div>
         <h3 className="mb-2 px-1 text-[15px] font-semibold text-z-ink">
-          Payment history
+          Transactions
         </h3>
         <div className="space-y-2">
           {earnings.length === 0 ? (
@@ -2314,37 +2292,193 @@ function EarningsPanel({ zone, onFlash }) {
             earnings.map((e) => (
               <div key={e.id} className="z-card flex items-center gap-3 p-4">
                 <span
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-success-soft text-success"
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                    e.status === "paid_out"
+                      ? "bg-z-gray text-z-mute"
+                      : "bg-success-soft text-success"
+                  }`}
                   aria-hidden="true"
                 >
-                  <CheckIcon size={18} />
+                  {e.status === "paid_out" ? (
+                    <UpIcon size={18} />
+                  ) : (
+                    <DownIcon size={18} />
+                  )}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="text-[14px] font-semibold text-z-ink">
-                    {fmt(e.net, e.currency)}
+                    {e.status === "paid_out" ? "Withdrawal" : "Subscription payment"}
                   </div>
                   <div className="text-[12px] text-z-mute">
                     {new Date(e.date).toLocaleDateString("en-GB", {
                       day: "numeric",
                       month: "short",
                       year: "numeric",
-                    })} {" · "}
-                    gross {fmt(e.amount, e.currency)} − fee {fmt(e.fee, e.currency)}
+                    })}
+                    {e.status !== "paid_out" &&
+                      ` · gross ${fmt(e.amount, e.currency)} − fee ${fmt(e.fee, e.currency)}`}
                   </div>
                 </div>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                    e.status === "available"
-                      ? "bg-success-soft text-success"
-                      : "bg-z-gray text-z-mute"
-                  }`}
-                >
-                  {e.status}
-                </span>
+                <div className="text-right">
+                  <div
+                    className={`text-[14px] font-bold ${
+                      e.status === "paid_out" ? "text-z-mute" : "text-success"
+                    }`}
+                  >
+                    {e.status === "paid_out" ? "−" : "+"}
+                    {fmt(e.status === "paid_out" ? e.net : e.net, e.currency)}
+                  </div>
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wide ${
+                      e.status === "available" ? "text-success" : "text-z-mute"
+                    }`}
+                  >
+                    {e.status === "available" ? "Available" : "Withdrawn"}
+                  </span>
+                </div>
               </div>
             ))
           )}
         </div>
+      </div>
+
+      {sheet && (
+        <WithdrawSheet
+          available={available}
+          currency={summary.currency}
+          zoneName={zone?.name || "your zone"}
+          onClose={() => setSheet(false)}
+          onDone={async (msg) => {
+            setSheet(false);
+            onFlash(msg);
+            await refetch();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* Bottom-sheet withdrawal form: amount + bank details, mock payout. */
+function WithdrawSheet({ available, currency, zoneName, onClose, onDone }) {
+  const [amount, setAmount] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value <= 0) {
+      setError("Enter a valid amount");
+      return;
+    }
+    if (value > available) {
+      setError(`Amount exceeds your available balance`);
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await withdrawEarnings(value, bankName.trim(), accountNumber.trim());
+      await onDone(`Withdrawal of ${currency} ${value.toLocaleString()} initiated`);
+    } catch (err) {
+      setError(err.status === 0 ? "Offline — try again" : err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const field =
+    "min-h-[44px] w-full rounded-xl border border-z-line bg-white px-3 text-[14px] text-z-ink outline-none focus:border-z-blue";
+  const label = "mb-1.5 block text-[12px] font-semibold text-z-mute";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Withdraw funds"
+    >
+      <div
+        className="w-full rounded-t-3xl z-surface p-5 sm:max-w-sm sm:rounded-3xl"
+        onClick={(ev) => ev.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-[17px] font-bold text-z-ink">Withdraw funds</h3>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-z-gray text-z-ink"
+          >
+            <CloseIcon size={14} />
+          </button>
+        </div>
+        <div className="rounded-xl bg-z-gray p-3 text-[12px] text-z-mute">
+          Available: {" "}
+          <span className="font-bold text-z-ink">
+            {currency} {Number(available).toLocaleString()}
+          </span>{" "}
+          · paid to your bank account
+        </div>
+        <div className="mt-3 space-y-3">
+          <div>
+            <span className={label}>Amount ({currency})</span>
+            <input
+              className={field}
+              type="number"
+              min="1"
+              inputMode="decimal"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+            <button
+              type="button"
+              className="mt-1 text-[11px] font-semibold text-z-blue"
+              onClick={() => setAmount(String(available))}
+            >
+              Withdraw all
+            </button>
+          </div>
+          <div>
+            <span className={label}>Bank name</span>
+            <input
+              className={field}
+              placeholder="e.g. GTBank"
+              value={bankName}
+              onChange={(e) => setBankName(e.target.value)}
+            />
+          </div>
+          <div>
+            <span className={label}>Account number</span>
+            <input
+              className={field}
+              inputMode="numeric"
+              maxLength={10}
+              placeholder="10-digit account number"
+              value={accountNumber}
+              onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ""))}
+            />
+          </div>
+        </div>
+        {error && (
+          <p className="mt-3 text-center text-[12px] font-semibold text-danger">
+            {error}
+          </p>
+        )}
+        <ZoneButton
+          className="mt-4 w-full min-h-[46px]"
+          loading={busy}
+          disabled={!amount || !bankName.trim() || accountNumber.length < 10}
+          onClick={submit}
+        >
+          Confirm withdrawal
+        </ZoneButton>
+        <p className="mt-2 text-center text-[11px] text-z-mute">
+          Withdrawals from {zoneName} are processed instantly (demo payout).
+        </p>
       </div>
     </div>
   );
@@ -2352,24 +2486,19 @@ function EarningsPanel({ zone, onFlash }) {
 
 /* ---------------- Rate a zone (member side) ----------------
    Members star-rate the trader's zone; the trader's displayed rating is
-   recomputed server-side as the live average, so it stays dynamic. */
+   recomputed server-side as the live average, so it stays dynamic.
+   The rate card is hidden for: (a) users who have already rated — they see
+   only the community reviews, and (b) the zone's owner. */
 
 function RateZoneCard({ handle, traderName }) {
-  const { myRating, ratings, rating, reviewCount, refresh } =
+  const { myRating, ratings, rating, reviewCount, isOwner, loading, refresh } =
     useZoneRatings(handle);
-  const [stars, setStars] = useState(myRating?.stars || 0);
-  const [comment, setComment] = useState(myRating?.comment || "");
+  const [stars, setStars] = useState(0);
+  const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState("");
-
-  // Keep the form in sync once the server value arrives.
-  useEffect(() => {
-    if (myRating && stars === 0) {
-      setStars(myRating.stars);
-      setComment(myRating.comment || "");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync from server once
-  }, [myRating]);
+  // Flip to true once the user submits — the card disappears immediately.
+  const [justRated, setJustRated] = useState(false);
 
   const submit = async () => {
     if (!stars) return;
@@ -2377,6 +2506,7 @@ function RateZoneCard({ handle, traderName }) {
     try {
       await rateZone(handle, stars, comment.trim());
       setDone("Rating saved — thanks for the feedback!");
+      setJustRated(true);
       refresh();
       setTimeout(() => setDone(""), 2500);
     } catch {
@@ -2385,6 +2515,39 @@ function RateZoneCard({ handle, traderName }) {
       setSaving(false);
     }
   };
+
+  // Owners never see the rate card; members who already rated see a small
+  // "thanks" confirmation with the community reviews underneath.
+  const alreadyRated = Boolean(myRating) || justRated;
+  if (loading || isOwner) return null;
+
+  if (alreadyRated) {
+    return (
+      <div className="z-card p-4">
+        <div className="flex items-center gap-2">
+          <StarIc size={16} filled />
+          <h2 className="text-[15px] font-bold text-z-ink">Community reviews</h2>
+          <span className="ml-auto text-[12px] text-z-mute">
+            {rating != null ? `${rating} · ${reviewCount} reviews` : ""}
+          </span>
+        </div>
+        {done && (
+          <p className="mt-2 text-[12px] font-semibold text-success">{done}</p>
+        )}
+        {ratings.length > 0 ? (
+          <div className="mt-3 divide-y divide-z-line">
+            {ratings.slice(0, 4).map((r) => (
+              <ReviewRow key={r.id} r={r} />
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-[12px] text-z-mute">
+            You rated this zone — thanks for the feedback!
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="z-card p-4">
@@ -2395,6 +2558,9 @@ function RateZoneCard({ handle, traderName }) {
           {rating != null ? `${rating} · ${reviewCount} reviews` : ""}
         </span>
       </div>
+      {done && (
+        <p className="mt-2 text-[12px] font-semibold text-success">{done}</p>
+      )}
       <div className="mt-3 flex gap-1.5" role="radiogroup" aria-label="Your rating">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
@@ -2423,31 +2589,34 @@ function RateZoneCard({ handle, traderName }) {
         disabled={!stars}
         onClick={submit}
       >
-        {myRating && myRating.stars === stars ? "Update rating" : "Submit rating"}
+        Submit rating
       </ZoneButton>
-      {done && (
-        <p className="mt-2 text-center text-[12px] font-semibold text-success">{done}</p>
-      )}
       {ratings.length > 0 && (
         <div className="mt-4 divide-y divide-z-line">
           {ratings.slice(0, 4).map((r) => (
-            <div key={r.id} className="flex items-start gap-2.5 py-2.5 first:pt-0">
-              <ZoneAvatar name={r.name} size={28} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-[12px] font-semibold text-z-ink">
-                    {r.name}
-                  </span>
-                  <ZoneStars rating={r.stars} size={10} />
-                </div>
-                {r.comment && (
-                  <p className="text-[12px] leading-snug text-z-mute">{r.comment}</p>
-                )}
-              </div>
-            </div>
+            <ReviewRow key={r.id} r={r} />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function ReviewRow({ r }) {
+  return (
+    <div className="flex items-start gap-2.5 py-2.5 first:pt-0">
+      <ZoneAvatar name={r.name} size={28} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-[12px] font-semibold text-z-ink">
+            {r.name}
+          </span>
+          <ZoneStars rating={r.stars} size={10} />
+        </div>
+        {r.comment && (
+          <p className="text-[12px] leading-snug text-z-mute">{r.comment}</p>
+        )}
+      </div>
     </div>
   );
 }

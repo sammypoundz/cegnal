@@ -175,6 +175,12 @@ html.dark .z-surface {
   background: #151c24;
 }
 
+/* Toast pills: keep light-on-dark in light mode, dark-on-light in dark mode
+   (bg-z-ink flips to a light color in dark mode, so white text is invisible). */
+html.dark .toast-pill {
+  color: #0c1116;
+}
+
 /* Zone header/drawer/tabs use bg-white directly */
 html.dark .bg-white\/95 {
   background-color: rgba(21, 28, 36, 0.95);
