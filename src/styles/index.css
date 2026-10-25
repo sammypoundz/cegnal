@@ -189,6 +189,23 @@ html.dark .bg-white\/60 {
   background-color: rgba(21, 28, 36, 0.6);
 }
 
+/* Zone form fields hard-code bg-white for inputs/textareas/selects.
+   In dark mode flip them to the dark surface and light text. */
+html.dark input.bg-white,
+html.dark textarea.bg-white,
+html.dark select.bg-white {
+  background-color: #151c24;
+  color: var(--color-z-ink);
+}
+html.dark input.bg-white::placeholder,
+html.dark textarea.bg-white::placeholder {
+  color: var(--color-z-mute);
+}
+html.dark select.bg-white option {
+  background-color: #151c24;
+  color: var(--color-z-ink);
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
